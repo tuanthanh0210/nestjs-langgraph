@@ -33,10 +33,21 @@ services:
       DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:-Asia/Ho_Chi_Minh}
       CORS_ORIGINS: ${CORS_ORIGINS:-*}
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
+      STORE_NAME: ${STORE_NAME:-NestShop}
+      STORE_HOTLINE: ${STORE_HOTLINE:-0900 000 000}
+      STORE_EMAIL: ${STORE_EMAIL:-hello@nestshop.vn}
+      STORE_ADDRESS: ${STORE_ADDRESS:-123 Nguyễn Trãi, Quận 1, TP.HCM}
+      SHIPPING_FEE: ${SHIPPING_FEE:-30000}
+      FREE_SHIPPING_THRESHOLD: ${FREE_SHIPPING_THRESHOLD:-500000}
       DATABASE_URL: postgresql://agent:agent@db:5432/agent
+    volumes:
+      - ./data/products.csv:/app/data/products.csv:ro
+      - ./data/store-info.md:/app/data/store-info.md:ro
+      - orders:/app/data/orders
     depends_on:
       db:
         condition: service_healthy
 
 volumes:
   pgdata:
+  orders:

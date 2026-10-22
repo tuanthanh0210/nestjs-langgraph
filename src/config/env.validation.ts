@@ -53,6 +53,25 @@ const envSchema = z
     AGENT_SYSTEM_PROMPT: optionalString,
     DEFAULT_TIMEZONE: timeZoneString.default('Asia/Ho_Chi_Minh'),
 
+    // Store ----------------------------------------------------------------
+    STORE_NAME: z.string().min(1).default('NestShop'),
+    STORE_HOTLINE: optionalString,
+    STORE_EMAIL: optionalString,
+    STORE_ADDRESS: optionalString,
+    PRODUCTS_FILE: z.string().min(1).default('./data/products.csv'),
+    STORE_INFO_FILE: z.string().min(1).default('./data/store-info.md'),
+
+    // Orders ---------------------------------------------------------------
+    ORDERS_FILE: z.string().min(1).default('./data/orders/orders.jsonl'),
+    ORDER_PREFIX: z
+      .string()
+      .regex(/^[A-Za-z0-9]{2,8}$/, 'ORDER_PREFIX must contain 2–8 letters or digits')
+      .default('ORD')
+      .transform((value) => value.toUpperCase()),
+    MAX_ORDER_ITEMS: z.coerce.number().int().min(1).max(50).default(20),
+    SHIPPING_FEE: z.coerce.number().int().min(0).default(30_000),
+    FREE_SHIPPING_THRESHOLD: z.coerce.number().int().min(0).default(500_000),
+
     // Persistence ----------------------------------------------------------
     DATABASE_URL: z.preprocess(
       emptyToUndefined,

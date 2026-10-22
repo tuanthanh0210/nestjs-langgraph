@@ -57,11 +57,33 @@ export class ChatResponseDto {
 }
 
 export class ToolInfoDto {
-  @ApiProperty({ example: 'calculator' })
+  @ApiProperty({ example: 'search_products' })
   name!: string;
 
-  @ApiProperty({ example: 'Evaluate an arithmetic expression…' })
+  @ApiProperty({ example: 'Search the store product catalog…' })
   description!: string;
+}
+
+export class StoreInfoDto {
+  @ApiProperty({ example: 'NestShop' })
+  name!: string;
+
+  @ApiPropertyOptional({ example: '0900 000 000' })
+  hotline?: string;
+
+  @ApiPropertyOptional({ example: 'hello@nestshop.vn' })
+  email?: string;
+
+  @ApiPropertyOptional({ example: '123 Nguyễn Trãi, Quận 1, TP.HCM' })
+  address?: string;
+}
+
+export class CatalogInfoDto {
+  @ApiProperty({ example: 14 })
+  products!: number;
+
+  @ApiProperty({ type: [String], example: ['Phụ kiện', 'Thiết bị', 'Âm thanh', 'Đời sống'] })
+  categories!: string[];
 }
 
 export class AgentInfoDto {
@@ -76,6 +98,12 @@ export class AgentInfoDto {
 
   @ApiProperty({ example: 8 })
   maxIterations!: number;
+
+  @ApiProperty({ type: StoreInfoDto })
+  store!: StoreInfoDto;
+
+  @ApiProperty({ type: CatalogInfoDto })
+  catalog!: CatalogInfoDto;
 
   @ApiProperty({ type: [ToolInfoDto] })
   tools!: ToolInfoDto[];

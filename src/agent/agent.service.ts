@@ -3,6 +3,7 @@ import { BadGatewayException, Injectable, Logger, type OnModuleInit } from '@nes
 import { ConfigService } from '@nestjs/config';
 import { HumanMessage, type BaseMessage } from '@langchain/core/messages';
 import type { Env } from '../config/env.validation.js';
+import { CatalogService } from '../catalog/catalog.service.js';
 import { ToolsService } from '../tools/tools.service.js';
 import { createAgentGraph, type AgentGraph } from './agent.graph.js';
 import { buildSystemPrompt } from './agent.prompt.js';
@@ -33,6 +34,7 @@ export class AgentService implements OnModuleInit {
     private readonly chatModel: ChatModelService,
     private readonly checkpointer: CheckpointerService,
     private readonly tools: ToolsService,
+    private readonly catalog: CatalogService,
     private readonly config: ConfigService<Env, true>,
   ) {}
 
@@ -49,6 +51,11 @@ export class AgentService implements OnModuleInit {
           customPrompt: this.config.get('AGENT_SYSTEM_PROMPT', { infer: true }),
           timezone: this.config.get('DEFAULT_TIMEZONE', { infer: true }),
           maxIterations: this.maxIterations,
+          storeName: this.config.get('STORE_NAME', { infer: true }),
+          storeHotline: this.config.get('STORE_HOTLINE', { infer: true }),
+          storeAddress: this.config.get('STORE_ADDRESS', { infer: true }),
+          catalogSize: this.catalog.productCount,
+          categories: this.catalog.getCategories(),
         }),
     });
 
@@ -62,11 +69,29 @@ export class AgentService implements OnModuleInit {
   }
 
   getInfo(): AgentInfo {
+    const stats = this.catalog.getStats();
+
     return {
       provider: this.chatModel.provider,
       model: this.chatModel.modelName,
       persistence: this.checkpointer.kind,
       maxIterations: this.maxIterations,
+      store: {
+        name: this.config.get('STORE_NAME', { infer: true }),
+        ...(this.config.get('STORE_HOTLINE', { infer: true })
+          ? { hotline: this.config.get('STORE_HOTLINE', { infer: true }) }
+          : {}),
+        ...(this.config.get('STORE_EMAIL', { infer: true })
+          ? { email: this.config.get('STORE_EMAIL', { infer: true }) }
+          : {}),
+        ...(this.config.get('STORE_ADDRESS', { infer: true })
+          ? { address: this.config.get('STORE_ADDRESS', { infer: true }) }
+          : {}),
+      },
+      catalog: {
+        products: stats.productCount,
+        categories: stats.categories,
+      },
       tools: this.tools.describe(),
     };
   }

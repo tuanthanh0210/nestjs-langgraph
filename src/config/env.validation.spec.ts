@@ -10,6 +10,12 @@ describe('validateEnv', () => {
     expect(env.AGENT_MAX_ITERATIONS).toBe(8);
     expect(env.DATABASE_URL).toBeUndefined();
     expect(env.SWAGGER_ENABLED).toBe(true);
+    expect(env.STORE_NAME).toBe('NestShop');
+    expect(env.PRODUCTS_FILE).toBe('./data/products.csv');
+    expect(env.ORDERS_FILE).toBe('./data/orders/orders.jsonl');
+    expect(env.SHIPPING_FEE).toBe(30_000);
+    expect(env.FREE_SHIPPING_THRESHOLD).toBe(500_000);
+    expect(env.ORDER_PREFIX).toBe('ORD');
   });
 
   it('requires an API key when the openai provider is explicit', () => {
@@ -38,6 +44,12 @@ describe('validateEnv', () => {
       /Invalid environment configuration/,
     );
     expect(validateEnv({ SWAGGER_ENABLED: 'false' }).SWAGGER_ENABLED).toBe(false);
+  });
+
+  it('validates the order prefix', () => {
+    expect(validateEnv({ ORDER_PREFIX: 'shop' }).ORDER_PREFIX).toBe('SHOP');
+    expect(() => validateEnv({ ORDER_PREFIX: 'x' })).toThrow(/ORDER_PREFIX/);
+    expect(() => validateEnv({ ORDER_PREFIX: 'bad prefix' })).toThrow(/ORDER_PREFIX/);
   });
 
   it('validates the default time zone', () => {

@@ -6,10 +6,10 @@
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#070a12" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236366f1'/%3E%3Ccircle cx='10' cy='11' r='3' fill='%23fff'/%3E%3Ccircle cx='22' cy='11' r='3' fill='%236ee7b7'/%3E%3Ccircle cx='16' cy='23' r='3' fill='%23fff'/%3E%3C/svg%3E" />
-    <title>NestJS × LangGraph — Agentic AI</title>
+    <title>NestShop — AI Sales Assistant</title>
     <meta
       name="description"
-      content="A stateful tool-calling AI agent built with NestJS, LangGraph and TypeScript."
+      content="AI sales assistant that recommends products from your catalog, answers policy questions and closes orders in chat."
     />
     <style>
       :root {
@@ -399,14 +399,6 @@
         content: '−';
       }
 
-      .tool-output-label {
-        padding: 7px 11px 0;
-        color: var(--faint);
-        font-size: 10px;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-      }
-
       .tool pre {
         margin: 0;
         padding: 9px 11px;
@@ -426,7 +418,7 @@
         width: 100%;
         max-width: 860px;
         margin: 0 auto;
-        padding: 8vh 22px 32px;
+        padding: 3vh 22px 28px;
         animation: rise 0.4s ease both;
       }
 
@@ -445,9 +437,9 @@
       }
 
       .empty h2 {
-        margin: 0 0 14px;
+        margin: 0 0 10px;
         max-width: 660px;
-        font-size: clamp(30px, 4.4vw, 48px);
+        font-size: clamp(28px, 4.2vw, 46px);
         line-height: 1.06;
         letter-spacing: -0.035em;
         font-weight: 640;
@@ -462,7 +454,7 @@
 
       .empty > p {
         max-width: 560px;
-        margin: 0 0 26px;
+        margin: 0 0 20px;
         color: var(--muted);
         font-size: 14.5px;
         line-height: 1.7;
@@ -508,11 +500,99 @@
         line-height: 1.45;
       }
 
+      .featured {
+        max-width: 720px;
+        margin-top: 18px;
+      }
+
+      .featured-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 10px;
+      }
+
+      .featured-head h3 {
+        margin: 0;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .featured-head span {
+        color: var(--faint);
+        font-size: 10.5px;
+      }
+
+      .featured-grid {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(160px, 1fr);
+        gap: 8px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        scrollbar-width: thin;
+      }
+
+      .product-card {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 12px 13px;
+        text-align: left;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: rgba(15, 23, 42, 0.44);
+        color: var(--text);
+        cursor: pointer;
+        transition:
+          border-color 0.18s ease,
+          background 0.18s ease,
+          transform 0.18s ease;
+      }
+
+      .product-card:hover {
+        border-color: rgba(99, 102, 241, 0.45);
+        background: rgba(30, 41, 59, 0.62);
+        transform: translateY(-1px);
+      }
+
+      .product-cat {
+        color: #a5b4fc;
+        font-size: 9.5px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .product-name {
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.35;
+      }
+
+      .product-price {
+        color: #6ee7b7;
+        font-family: var(--mono);
+        font-size: 11.5px;
+      }
+
+      .product-stock {
+        color: var(--faint);
+        font-size: 10px;
+      }
+
+      .tool.confirmed {
+        border-left-color: var(--emerald);
+      }
+
       .stack {
         display: flex;
         flex-wrap: wrap;
         gap: 7px;
-        margin-top: 24px;
+        margin-top: 18px;
         color: var(--faint);
         font-family: var(--mono);
         font-size: 10.5px;
@@ -701,6 +781,12 @@
         }
       }
 
+      @media (max-height: 860px) {
+        .stack {
+          display: none;
+        }
+      }
+
       @media (max-width: 720px) {
         .topbar {
           padding: 11px 14px;
@@ -715,6 +801,7 @@
         }
 
         .badge.persistence,
+        .badge.catalog,
         .ghost-btn.docs {
           display: none;
         }
@@ -730,6 +817,11 @@
 
         .suggestions {
           grid-template-columns: 1fr;
+        }
+
+        .featured-grid {
+          grid-auto-flow: row;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
         .bubble {
@@ -777,8 +869,8 @@
             </svg>
           </div>
           <div>
-            <h1>NestJS × LangGraph</h1>
-            <p>Agentic AI starter</p>
+            <h1 id="storeName">AI Sales Assistant</h1>
+            <p>Tư vấn &amp; chốt đơn</p>
           </div>
         </div>
         <div class="top-actions">
@@ -788,52 +880,75 @@
           <span id="persistenceBadge" class="badge persistence" title="Conversation persistence">
             <span class="dot"></span><span>…</span>
           </span>
+          <span id="catalogBadge" class="badge catalog" title="Products in the catalog">
+            <span class="dot"></span><span>…</span>
+          </span>
           <a class="ghost-btn docs" href="/docs" target="_blank" rel="noreferrer">API docs ↗</a>
           <button id="newChat" class="ghost-btn" type="button">Cuộc trò chuyện mới</button>
         </div>
       </header>
 
       <div id="mockBanner" class="banner" hidden>
-        <strong>Mock mode.</strong> Chưa cần API key — agent vẫn chạy vòng lặp tool thật với model
-        offline. Đặt <code>LLM_PROVIDER=openai</code> và <code>OPENAI_API_KEY</code> trong
-        <code>.env</code> để dùng LLM thật.
+        <strong>Mock mode.</strong> Chưa cần API key — agent vẫn tìm sản phẩm, tính đơn và tạo đơn
+        offline. Đặt <code>LLM_PROVIDER=openai</code> + <code>OPENAI_API_KEY</code> trong
+        <code>.env</code> để hội thoại tự nhiên hơn.
       </div>
 
       <main id="chat" class="chat">
         <section id="empty" class="empty">
-          <div class="eyebrow"><span>◆</span> Stateful · Tool-calling · Streaming</div>
-          <h2>Một agent thật sự,<br /><span>không chỉ là chatbot.</span></h2>
+          <div class="eyebrow"><span>◆</span> Tư vấn bằng dữ liệu thật · Chốt đơn trong chat</div>
+          <h2>Tìm đúng sản phẩm,<br /><span>chốt đơn ngay trong chat.</span></h2>
           <p>
-            LangGraph điều phối vòng lặp <em>reason → act → observe</em>; NestJS lo phần API,
-            validation, streaming và persistence. Hãy thử một trong các tác vụ bên dưới.
+            Agent hỏi nhu cầu, tra đúng catalog, tính phí giao hàng và chỉ tạo đơn sau khi bạn xác
+            nhận. Không bịa giá, không tự chốt khi chưa đồng ý.
           </p>
 
           <div class="suggestions">
-            <button class="suggestion" type="button" data-prompt="Tính 12 * (3 + 1) giúp anh">
-              <strong>Tính toán có công cụ</strong>
-              <span>“Tính 12 * (3 + 1)” → calculator</span>
-            </button>
-            <button class="suggestion" type="button" data-prompt="Mấy giờ ở Hà Nội rồi?">
-              <strong>Thời gian thực</strong>
-              <span>“Mấy giờ ở Hà Nội rồi?” → current_time</span>
-            </button>
-            <button class="suggestion" type="button" data-prompt="Thời tiết ở Hà Nội hôm nay thế nào?">
-              <strong>Dữ liệu live</strong>
-              <span>“Thời tiết ở Hà Nội hôm nay?” → get_weather</span>
+            <button
+              class="suggestion"
+              type="button"
+              data-prompt="Tư vấn tai nghe dưới 1 triệu giúp mình"
+            >
+              <strong>Tư vấn theo ngân sách</strong>
+              <span>“Tai nghe dưới 1 triệu” → search_products</span>
             </button>
             <button
               class="suggestion"
               type="button"
-              data-prompt="Giải thích ngắn gọn LangGraph là gì và khi nào nên dùng nó?"
+              data-prompt="Mình cần quà tặng sinh nhật cho bạn nữ, ngân sách khoảng 500k"
             >
-              <strong>Hỏi kiến thức</strong>
-              <span>“LangGraph là gì và khi nào nên dùng?”</span>
+              <strong>Tư vấn theo dịp</strong>
+              <span>“Quà sinh nhật cho bạn nữ” → gợi ý phù hợp</span>
+            </button>
+            <button
+              class="suggestion"
+              type="button"
+              data-prompt="Phí giao hàng và chính sách bảo hành thế nào?"
+            >
+              <strong>Chính sách rõ ràng</strong>
+              <span>Ship, đổi trả, bảo hành → search_store_info</span>
+            </button>
+            <button
+              class="suggestion"
+              type="button"
+              data-prompt="Mình muốn mua sản phẩm SP001"
+            >
+              <strong>Chốt đơn</strong>
+              <span>Hỏi tên, SĐT, địa chỉ → xác nhận → tạo đơn</span>
             </button>
           </div>
 
+          <div id="featured" class="featured" hidden>
+            <div class="featured-head">
+              <h3>Sản phẩm nổi bật</h3>
+              <span>Chạm để được tư vấn</span>
+            </div>
+            <div id="featuredGrid" class="featured-grid"></div>
+          </div>
+
           <div class="stack" aria-label="Tech stack">
-            <span>NestJS 12</span><span>LangGraph 1.x</span><span>TypeScript</span>
-            <span>SSE streaming</span><span>Postgres checkpointer</span><span>Swagger</span>
+            <span>Catalog CSV</span><span>LangGraph tools</span><span>Tính tiền server-side</span>
+            <span>SSE streaming</span><span>Postgres checkpointer</span><span>COD / chuyển khoản</span>
           </div>
         </section>
 
@@ -849,7 +964,7 @@
             id="input"
             rows="1"
             autocomplete="off"
-            placeholder="Hỏi agent bất cứ điều gì…"
+            placeholder="Hỏi về sản phẩm, phí ship, hoặc đặt hàng…"
           ></textarea>
           <button id="send" class="send" type="submit" aria-label="Gửi tin nhắn">
             <svg id="sendIcon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -864,14 +979,14 @@
           </button>
         </form>
         <div class="hint">
-          <span>Enter để gửi · Shift + Enter để xuống dòng · Agent có thể gọi công cụ</span>
+          <span>Enter để gửi · Shift + Enter xuống dòng · Agent sẽ hỏi SĐT/địa chỉ trước khi chốt đơn</span>
           <span id="threadLabel"></span>
         </div>
       </footer>
     </div>
 
     <script type="module">
-      const STORAGE_KEY = 'nlg.threadId';
+      const STORAGE_KEY = 'nestshop.threadId';
       const messagesEl = document.getElementById('messages');
       const emptyEl = document.getElementById('empty');
       const formEl = document.getElementById('form');
@@ -883,7 +998,11 @@
       const threadLabelEl = document.getElementById('threadLabel');
       const modelBadgeEl = document.getElementById('modelBadge');
       const persistenceBadgeEl = document.getElementById('persistenceBadge');
+      const catalogBadgeEl = document.getElementById('catalogBadge');
+      const storeNameEl = document.getElementById('storeName');
       const mockBannerEl = document.getElementById('mockBanner');
+      const featuredEl = document.getElementById('featured');
+      const featuredGridEl = document.getElementById('featuredGrid');
       const chatEl = document.getElementById('chat');
 
       const state = {
@@ -1033,6 +1152,67 @@
         assistant.meta.hidden = false;
       }
 
+      function safeToolInput(name, input) {
+        if (name !== 'create_order' || !input || typeof input !== 'object') return input;
+
+        const copy = { ...input };
+        if (typeof copy.phone === 'string') {
+          copy.phone =
+            copy.phone.length >= 7
+              ? `${copy.phone.slice(0, 3)}****${copy.phone.slice(-3)}`
+              : '***';
+        }
+        if (typeof copy.address === 'string') copy.address = '[đã ẩn]';
+        return copy;
+      }
+
+      function toolOutputDisplay(name, output) {
+        if (name === 'create_order') {
+          try {
+            const data = JSON.parse(output);
+            if (data.ok) {
+              return {
+                confirmed: true,
+                autoOpen: true,
+                text:
+                  `Mã đơn: ${data.orderCode}
+` +
+                  `Tổng thanh toán: ${data.totalFormatted}
+` +
+                  `Thanh toán: ${data.paymentMethod === 'bank_transfer' ? 'Chuyển khoản' : 'COD'}
+
+` +
+                  `${data.message ?? ''}`,
+              };
+            }
+          } catch {
+            // Fall through to the generic JSON renderer.
+          }
+        }
+
+        if (name === 'preview_order') {
+          try {
+            const data = JSON.parse(output);
+            if (data.ok) {
+              return {
+                confirmed: false,
+                autoOpen: true,
+                text:
+                  `Tạm tính: ${data.subtotalFormatted}
+` +
+                  `Phí giao hàng: ${data.shippingFeeFormatted}
+` +
+                  `Tổng: ${data.totalFormatted}`,
+              };
+            }
+          } catch {
+            // Fall through.
+          }
+        }
+
+        return { confirmed: false, autoOpen: false, text: formatToolOutput(output) };
+      }
+
       function addToolCard(assistant, name, input) {
         const card = document.createElement('div');
         card.className = 'tool running';
@@ -1049,10 +1229,16 @@
             <summary>Input</summary>
             <pre class="tool-input"></pre>
           </details>
-          <div class="tool-output-label" hidden>Output</div>
-          <pre class="tool-output" hidden></pre>`;
+          <details class="tool-output-details" hidden>
+            <summary>Output</summary>
+            <pre class="tool-output"></pre>
+          </details>`;
         card.querySelector('.tool-name').textContent = name;
-        card.querySelector('.tool-input').textContent = JSON.stringify(input ?? {}, null, 2);
+        card.querySelector('.tool-input').textContent = JSON.stringify(
+          safeToolInput(name, input) ?? {},
+          null,
+          2,
+        );
         assistant.tools.appendChild(card);
         scrollToBottom();
         return card;
@@ -1064,11 +1250,18 @@
         if (!card) return;
         card.classList.remove('running');
         card.classList.add('done');
-        card.querySelector('.tool-status').textContent = 'done';
+        const display = toolOutputDisplay(name, output);
+        if (display.confirmed) {
+          card.classList.add('confirmed');
+          card.querySelector('.tool-status').textContent = 'confirmed';
+        } else {
+          card.querySelector('.tool-status').textContent = 'done';
+        }
+        const outputDetails = card.querySelector('.tool-output-details');
         const outputEl = card.querySelector('.tool-output');
-        outputEl.textContent = formatToolOutput(output);
-        outputEl.hidden = false;
-        card.querySelector('.tool-output-label').hidden = false;
+        outputEl.textContent = display.text;
+        outputDetails.hidden = false;
+        outputDetails.open = Boolean(display.autoOpen);
         scrollToBottom();
       }
 
@@ -1245,13 +1438,16 @@
               meta: null,
             };
             const card = addToolCard(assistant, call.name || message.name || 'tool', call.args);
+            const display = toolOutputDisplay(call.name || message.name || 'tool', message.content || '');
             card.classList.remove('running');
             card.classList.add('done');
-            card.querySelector('.tool-status').textContent = 'done';
+            card.querySelector('.tool-status').textContent = display.confirmed ? 'confirmed' : 'done';
+            if (display.confirmed) card.classList.add('confirmed');
+            const outputDetails = card.querySelector('.tool-output-details');
             const outputEl = card.querySelector('.tool-output');
-            outputEl.textContent = formatToolOutput(message.content);
-            outputEl.hidden = false;
-            card.querySelector('.tool-output-label').hidden = false;
+            outputEl.textContent = display.text;
+            outputDetails.hidden = false;
+            outputDetails.open = Boolean(display.autoOpen);
           }
         }
 
@@ -1291,12 +1487,67 @@
           persistenceBadgeEl.lastElementChild.textContent = info.persistence;
           persistenceBadgeEl.title = `Conversation persistence: ${info.persistence}`;
 
+          if (info.store?.name) {
+            storeNameEl.textContent = info.store.name;
+            document.title = `${info.store.name} — AI Sales Assistant`;
+          }
+
+          const productCount = info.catalog?.products ?? 0;
+          catalogBadgeEl.lastElementChild.textContent = `${productCount} sản phẩm`;
+          catalogBadgeEl.title = `Catalog: ${productCount} sản phẩm · ${(info.catalog?.categories ?? []).join(', ')}`;
+
           if (info.provider === 'mock') mockBannerEl.hidden = false;
         } catch (error) {
           modelBadgeEl.lastElementChild.textContent = 'offline';
           persistenceBadgeEl.lastElementChild.textContent = 'unknown';
+          catalogBadgeEl.lastElementChild.textContent = 'unknown';
           showError('Không tải được cấu hình agent. Kiểm tra server.');
           console.warn('Could not load agent info', error);
+        }
+      }
+
+      async function loadFeatured() {
+        try {
+          const response = await fetch('/api/catalog/products?limit=4&inStockOnly=true');
+          if (!response.ok) return;
+          const data = await response.json();
+          const products = data.products ?? [];
+          if (products.length === 0) return;
+
+          featuredGridEl.innerHTML = '';
+          products.forEach((product) => {
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = 'product-card';
+
+            const category = document.createElement('span');
+            category.className = 'product-cat';
+            category.textContent = product.category;
+
+            const name = document.createElement('span');
+            name.className = 'product-name';
+            name.textContent = product.name;
+
+            const price = document.createElement('span');
+            price.className = 'product-price';
+            price.textContent = product.priceFormatted;
+
+            const stock = document.createElement('span');
+            stock.className = 'product-stock';
+            stock.textContent =
+              product.stock === null ? 'Đang cập nhật tồn kho' : `Còn ${product.stock} sản phẩm`;
+
+            card.append(category, name, price, stock);
+            card.addEventListener('click', () => {
+              if (state.streaming) return;
+              sendMessage(`Tư vấn giúp mình sản phẩm ${product.name}`);
+            });
+            featuredGridEl.appendChild(card);
+          });
+
+          featuredEl.hidden = false;
+        } catch (error) {
+          console.warn('Could not load featured products', error);
         }
       }
 
@@ -1344,6 +1595,7 @@
       autoResize();
       await loadInfo();
       await loadHistory();
+      await loadFeatured();
       updateEmptyState();
       inputEl.focus();
     </script>

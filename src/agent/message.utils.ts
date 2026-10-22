@@ -56,11 +56,28 @@ export function toChatMessage(message: BaseMessage): ChatMessage {
     chatMessage.toolCalls = message.tool_calls.map((call): ToolCall => ({
       id: call.id ?? '',
       name: call.name,
-      args: (call.args ?? {}) as Record<string, unknown>,
+      args: maskSensitiveToolArgs(call.name, (call.args ?? {}) as Record<string, unknown>),
     }));
   }
 
   return chatMessage;
+}
+
+function maskSensitiveToolArgs(
+  toolName: string,
+  args: Record<string, unknown>,
+): Record<string, unknown> {
+  if (toolName !== 'create_order') return args;
+
+  const masked = { ...args };
+  if (typeof masked.phone === 'string') {
+    masked.phone =
+      masked.phone.length >= 7 ? `${masked.phone.slice(0, 3)}****${masked.phone.slice(-3)}` : '***';
+  }
+  if (typeof masked.address === 'string') {
+    masked.address = '[hidden]';
+  }
+  return masked;
 }
 
 export function findFinalAssistantMessage(messages: BaseMessage[]): AIMessage | undefined {

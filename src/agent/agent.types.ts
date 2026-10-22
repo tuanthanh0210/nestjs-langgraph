@@ -26,11 +26,25 @@ export interface AgentRunResult {
   usage?: TokenUsage;
 }
 
+export interface StoreInfo {
+  name: string;
+  hotline?: string;
+  email?: string;
+  address?: string;
+}
+
+export interface CatalogInfo {
+  products: number;
+  categories: string[];
+}
+
 export interface AgentInfo {
   provider: 'openai' | 'mock';
   model: string;
   persistence: 'memory' | 'postgres';
   maxIterations: number;
+  store: StoreInfo;
+  catalog: CatalogInfo;
   tools: Array<{ name: string; description: string }>;
 }
 

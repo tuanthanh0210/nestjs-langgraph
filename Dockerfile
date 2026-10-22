@@ -11,6 +11,7 @@ FROM deps AS build
 COPY tsconfig.json tsconfig.build.json nest-cli.json ./
 COPY src ./src
 COPY public ./public
+COPY data ./data
 RUN pnpm build
 
 FROM node:22-alpine AS runner
@@ -26,8 +27,9 @@ RUN pnpm install --prod --frozen-lockfile --ignore-scripts && pnpm store prune
 
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/public ./public
+COPY --from=build /app/data ./data
 
-RUN chmod -R a+rX /app/public /app/dist
+RUN mkdir -p /app/data/orders && chown -R node:node /app/data && chmod -R a+rX /app/public /app/dist
 
 EXPOSE 3000
 USER node

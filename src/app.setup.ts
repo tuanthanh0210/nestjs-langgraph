@@ -40,6 +40,8 @@ export function configureApp(app: INestApplication, options: ConfigureAppOptions
       )
       .setVersion('1.0.0')
       .addTag('agent', 'Agent conversations, streaming and thread history')
+      .addTag('catalog', 'Product catalog search and details')
+      .addTag('orders', 'Public order tracking')
       .addTag('health', 'Liveness checks')
       .build();
 

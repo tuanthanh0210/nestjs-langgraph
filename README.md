@@ -1,88 +1,49 @@
-# NestJS × LangGraph — Agentic AI Starter
+# NestShop — AI Sales Agent (NestJS × LangGraph)
 
-Một repo khởi đầu **chạy được ngay** để xây app AI agentic bằng **NestJS 12 + LangGraph 1.x + TypeScript**, có tool calling, memory theo thread, streaming SSE, Postgres checkpointer, Swagger và giao diện chat demo.
+Agent tư vấn bán hàng chạy thật: đọc **file sản phẩm**, tư vấn theo nhu cầu/ngân sách, trả lời chính sách, hỏi **tên + SĐT + địa chỉ**, tính phí giao hàng và **chốt đơn sau khi khách xác nhận**.
 
-> Trạng thái: đã build, lint, typecheck và test (unit + e2e) pass. Chạy được **không cần API key** ở chế độ mock.
+Repo dùng **NestJS 12 + LangGraph 1.x + TypeScript**, có SSE streaming, Swagger, demo UI, Postgres checkpointer, Docker và test.
+
+> Đã verify: build, lint, typecheck, 28 unit test, 8 e2e test, Docker image + compose (app/Postgres) healthy.
 
 ![Demo UI](docs/screenshot.png)
 
-![Chat with a tool call](docs/screenshot-chat.png)
+![Chat tư vấn sản phẩm](docs/screenshot-chat.png)
 
 ---
 
 ## Mục lục
 
-- [Có gì trong repo](#có-gì-trong-repo)
-- [Kiến trúc](#kiến-trúc)
+- [Bài toán & phạm vi](#bài-toán--phạm-vi)
 - [Chạy nhanh](#chạy-nhanh)
-- [Dùng LLM thật](#dùng-llm-thật)
+- [Thay file sản phẩm](#thay-file-sản-phẩm)
+- [Sửa chính sách cửa hàng](#sửa-chính-sách-cửa-hàng)
+- [Kiến trúc](#kiến-trúc)
+- [Luồng chốt đơn](#luồng-chốt-đơn)
 - [API](#api)
-- [LangGraph hoạt động thế nào](#langgraph-hoạt-động-thế-nào)
-- [Thêm tool mới](#thêm-tool-mới)
-- [Memory & Postgres](#memory--postgres)
 - [Cấu hình](#cấu-hình)
+- [Dữ liệu & quyền riêng tư](#dữ-liệu--quyền-riêng-tư)
 - [Test](#test)
 - [Docker](#docker)
 - [Cấu trúc thư mục](#cấu-trúc-thư-mục)
-- [Lên production](#lên-production)
+- [Tùy chỉnh & mở rộng](#tùy-chỉnh--mở-rộng)
 - [Troubleshooting](#troubleshooting)
+- [Lên production](#lên-production)
 
 ---
 
-## Có gì trong repo
+## Bài toán & phạm vi
 
-| Thành phần | Mô tả |
-| --- | --- |
-| **Agentic loop** | `StateGraph` tự viết: `agent → tools → agent …`, có guard chống lặp vô hạn |
-| **Tool calling** | `calculator`, `current_time`, `get_weather` (Open-Meteo, không cần key) |
-| **Streaming** | SSE: `meta`, `token`, `tool_start`, `tool_end`, `done`, `error` |
-| **Memory** | LangGraph checkpointer theo `thread_id`; in-memory hoặc Postgres |
-| **API** | REST + SSE, DTO validation, Swagger tại `/docs` |
-| **Demo UI** | Chat UI tại `/ui/`: streaming, tool cards, thread persistence, mock banner |
-| **Chế độ mock** | Model offline deterministic — boot/test ngay không cần credential |
-| **Chất lượng** | TypeScript strict, ESLint, Prettier, unit test + e2e test (Vitest) |
-| **Hạ tầng** | Dockerfile multi-stage, `docker-compose.yml` (app + Postgres) |
-| **Tracing** | Hỗ trợ LangSmith qua biến môi trường |
+Agent này xử lý 4 nhóm việc:
 
-Điểm quan trọng: phần orchestration nằm ở [`agent.graph.ts`](src/agent/agent.graph.ts) và được viết bằng `StateGraph` thuần, không phải helper “hộp đen”. Đây là nơi bạn thêm routing, sub-agent, human-in-the-loop hoặc retry policy.
+1. **Tư vấn sản phẩm**: hỏi nhu cầu/ngân sách → tìm trong catalog → gợi ý 2–3 sản phẩm phù hợp kèm giá và tồn kho.
+2. **Giải đáp thắc mắc**: giao hàng, đổi trả, bảo hành, thanh toán, bảo mật, liên hệ — lấy từ file chính sách của shop.
+3. **Chốt đơn trong chat**: xác nhận sản phẩm/số lượng → thu thập tên, SĐT, địa chỉ → đọc lại tổng tiền → khách đồng ý → tạo đơn.
+4. **Tra cứu đơn**: khách đọc mã đơn, agent kiểm tra trạng thái.
 
----
+**Chưa có trong repo** (và đã ghi rõ ở phần production): thanh toán online, xác thực người dùng, huỷ/hoàn tiền tự động, đồng bộ tồn kho với POS/ERP, gửi SMS/Zalo. Đây là starter để anh gắn nghiệp vụ thật vào.
 
-## Kiến trúc
-
-```mermaid
-flowchart LR
-  A([START]) --> B[agent node<br/>LLM + tools]
-  B -->|có tool_calls<br/>và còn budget| C[tools node<br/>ToolNode]
-  C --> B
-  B -->|câu trả lời cuối| D([END])
-  B -->|hết maxIterations| E[limit node] --> D
-```
-
-```text
-Browser / Client
-      │  HTTP + SSE
-      ▼
-NestJS Controller  ── ValidationPipe ──►  AgentService
-                                              │
-                                              ▼
-                                    LangGraph StateGraph
-                                    ├─ agent  (ChatOpenAI | Mock)
-                                    ├─ tools  (ToolNode)
-                                    └─ limit  (loop guard)
-                                              │
-                                              ▼
-                              Checkpointer (Memory | Postgres)
-```
-
-**Luồng một request**
-
-1. `POST /api/agent/chat` (hoặc `/chat/stream`) → `ValidationPipe` kiểm tra DTO.
-2. `AgentService` tạo/định danh `thread_id`, nạp state cũ từ checkpointer.
-3. Node `agent` gọi model kèm system prompt + tool schemas + lịch sử.
-4. Nếu model trả `tool_calls`, conditional edge chuyển sang node `tools`; `ToolNode` chạy song song các tool, ghi kết quả dưới dạng `ToolMessage`.
-5. Quay lại `agent` cho tới khi có câu trả lời cuối hoặc hết `AGENT_MAX_ITERATIONS`.
-6. Mỗi bước được checkpointer lưu lại; response trả `threadId` để client dùng cho lượt sau.
+Điểm quan trọng: **file sản phẩm là nguồn sự thật duy nhất**. Agent không được bịa giá/tồn kho; mọi câu trả lời về sản phẩm đi qua tool `search_products` / `get_product`.
 
 ---
 
@@ -91,6 +52,7 @@ NestJS Controller  ── ValidationPipe ──►  AgentService
 **Yêu cầu:** Node.js ≥ 22.12, pnpm 11.
 
 ```bash
+cd /Users/thanhle/Desktop/nestjs-langgraph
 pnpm install
 cp .env.example .env
 pnpm dev
@@ -98,25 +60,21 @@ pnpm dev
 
 Mở:
 
-- Demo UI: <http://localhost:3000> (redirect sang `/ui/`)
+- UI: <http://localhost:3000> (redirect `/ui/`)
 - Swagger: <http://localhost:3000/docs>
 - Health: <http://localhost:3000/api/health>
 
-Mặc định `.env.example` đặt `LLM_PROVIDER=mock`. Agent vẫn thực hiện **đúng vòng lặp tool thật**:
+Mặc định `.env.example` dùng `LLM_PROVIDER=mock` nên chạy được **không cần API key**. Thử lần lượt:
 
-- “Tính 12 * (3 + 1) giúp anh” → gọi `calculator`
-- “Mấy giờ ở Hà Nội rồi?” → gọi `current_time`
-- “Thời tiết ở Hà Nội hôm nay?” → gọi `get_weather`
+```text
+Tư vấn tai nghe dưới 1 triệu giúp mình
+Mình muốn mua SP001, tên: Nguyễn Văn A, sđt: 0901234567, địa chỉ: 123 Lê Lợi, Quận 1, TP.HCM
+Đồng ý
+```
 
-Mock model trả lời theo kịch bản cố định và không gọi mạng; riêng tool `get_weather` gọi Open-Meteo nên cần internet. Đổi sang LLM thật ở bước dưới.
+Mock model sẽ: tìm sản phẩm → gọi `preview_order` → đọc lại tổng tiền → chờ khách xác nhận → gọi `create_order` và trả mã đơn. Với LLM thật, hội thoại tự nhiên hơn nhưng cùng một quy trình.
 
----
-
-## Dùng LLM thật
-
-Repo dùng `ChatOpenAI`, nên **mọi endpoint OpenAI-compatible** đều chạy được.
-
-### OpenAI
+### Dùng LLM thật
 
 ```dotenv
 LLM_PROVIDER=openai
@@ -124,7 +82,7 @@ OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o-mini
 ```
 
-### DeepSeek
+DeepSeek:
 
 ```dotenv
 LLM_PROVIDER=openai
@@ -133,27 +91,160 @@ OPENAI_BASE_URL=https://api.deepseek.com/v1
 OPENAI_MODEL=deepseek-chat
 ```
 
-### OpenRouter
+Ollama/OpenRouter/vLLM/LiteLLM đều dùng được qua `OPENAI_BASE_URL`. Model cần hỗ trợ **tool calling**.
 
-```dotenv
-LLM_PROVIDER=openai
-OPENAI_API_KEY=sk-or-v1-...
-OPENAI_BASE_URL=https://openrouter.ai/api/v1
-OPENAI_MODEL=anthropic/claude-sonnet-4
+---
+
+## Thay file sản phẩm
+
+Anh đặt file thật vào `data/products.csv` (hoặc trỏ `PRODUCTS_FILE` sang file khác). File mẫu hiện có 14 sản phẩm để chạy thử; thay nội dung là xong.
+
+### Định dạng hỗ trợ
+
+- **CSV** (dấu phẩy, chấm phẩy hoặc tab — tự nhận).
+- **JSON**: mảng sản phẩm hoặc `{ "products": [...] }`.
+- Excel: mở bằng Excel/Google Sheets → **Save as CSV UTF-8**, rồi thay file.
+- Có hỗ trợ field có dấu phẩy, dấu ngoặc kép, xuống dòng trong ô (chuẩn CSV).
+
+### Các cột
+
+| Cột (chuẩn) | Bắt buộc | Ghi chú |
+| --- | --- | --- |
+| `id` | Nên có | Mã ổn định, dùng để đặt hàng. Nếu thiếu, hệ thống tự sinh `SP001`, `SP002`… |
+| `name` | **Có** | Tên sản phẩm |
+| `price` | **Có** | Số tiền; hiểu `890.000`, `1,290,000`, `890000` |
+| `stock` | Không | Số nguyên; để trống = không quản lý tồn kho; `0` = hết hàng |
+| `description` | Không | Mô tả dài |
+| `category` | Không | Mặc định `Khác` |
+| `tags` | Không | Cách nhau bởi `,` `;` hoặc `|`, phục vụ tìm kiếm |
+| `attributes` | Không | `Màu:Đen|Bảo hành:12 tháng` hoặc JSON object |
+| `image_url` | Không | URL ảnh (UI hiện chưa render ảnh) |
+| `currency` | Không | Mặc định `VND` |
+
+**Tên cột tiếng Việt được nhận tự động**, ví dụ:
+
+- `Mã sản phẩm`, `Mã`, `SKU`
+- `Tên sản phẩm`, `Tên`
+- `Mô tả`, `Thông tin`
+- `Giá`, `Giá bán`
+- `Danh mục`, `Loại`
+- `Tồn kho`, `Số lượng`
+- `Thuộc tính`, `Thông số`
+- `Từ khóa`, `Tags`
+- `Hình ảnh`, `Ảnh`
+
+Cột lạ vẫn được giữ và đưa vào `attributes`, nên file hiện tại của anh không cần đổi ngay — chỉ cần có `tên` và `giá`.
+
+Ví dụ:
+
+```csv
+Mã sản phẩm,Tên sản phẩm,Mô tả,Giá,Danh mục,Tags,Tồn kho,Thuộc tính
+SP001,"Tai nghe Bluetooth AirBeat Pro","Tai nghe không dây chống ồn, pin 30 giờ.",890.000,Âm thanh,"tai nghe,bluetooth,chống ồn",25,"Màu sắc:Đen|Bảo hành:12 tháng"
 ```
 
-### Ollama (local)
+### Quy tắc dữ liệu
 
-```dotenv
-LLM_PROVIDER=openai
-OPENAI_API_KEY=ollama
-OPENAI_BASE_URL=http://localhost:11434/v1
-OPENAI_MODEL=llama3.1
+- `id` phải **duy nhất**; trùng ID → app báo lỗi ngay khi boot.
+- Dòng thiếu tên/giá sẽ bị bỏ qua kèm warning trong log.
+- File phải có ít nhất 1 sản phẩm hợp lệ.
+- Giá nên là số nguyên VND. Nếu shop dùng USD, đặt `currency=USD` và kiểm tra lại format.
+- Sửa file xong **restart app** (Docker đang mount file read-only nên chỉ cần restart container).
+- Đường dẫn mặc định: `./data/products.csv`; đổi bằng `PRODUCTS_FILE`.
+
+Nếu file thật của anh có cấu trúc khác (nhiều sheet, biến thể, file Excel gốc), gửi em file/mẫu — em map loader và cột cho đúng.
+
+---
+
+## Sửa chính sách cửa hàng
+
+`data/store-info.md` chứa chính sách và được tool `search_store_info` tra theo từ khóa. Các section dùng heading `##`:
+
+```md
+## Giao hàng
+- Miễn phí giao hàng cho đơn từ 500.000₫.
+- Đơn dưới 500.000₫: phí 30.000₫.
+
+## Đổi trả và bảo hành
+- Đổi mới trong 7 ngày nếu lỗi nhà sản xuất.
+- Bảo hành 12 tháng.
 ```
 
-> Model phải hỗ trợ **tool calling**. Nếu không, agent vẫn trả lời nhưng sẽ không gọi được tool.
+Thay nội dung mẫu bằng chính sách thật. Cập nhật thêm `.env`:
 
-Sau khi sửa `.env`, restart `pnpm dev`. UI sẽ hiện badge `openai · <model>` thay vì `mock`.
+```dotenv
+STORE_NAME=Tên shop của anh
+STORE_HOTLINE=0909 123 456
+STORE_EMAIL=hello@shop.vn
+STORE_ADDRESS=Địa chỉ shop
+```
+
+**Lưu ý:** `SHIPPING_FEE` và `FREE_SHIPPING_THRESHOLD` trong `.env` phải khớp với chính sách trong file. Mặc định mẫu: phí 30.000₫, miễn phí từ 500.000₫. Server dùng hai biến này để tính tiền, không đọc từ markdown.
+
+---
+
+## Kiến trúc
+
+```mermaid
+flowchart LR
+  U[Khách] -->|HTTP / SSE| API[NestJS API]
+  API --> S[AgentService]
+  S <--> CP[(Checkpointer<br/>Memory / Postgres)]
+  S --> G[LangGraph StateGraph]
+  G -->|tool_calls| T[Tools]
+  T --> C[(data/products.csv)]
+  T --> P[(data/store-info.md)]
+  T --> O[(Orders JSONL)]
+  T -->|ToolMessage| G
+  G -->|câu trả lời cuối| S
+```
+
+Graph:
+
+```mermaid
+flowchart LR
+  A([START]) --> B[agent node]
+  B -->|có tool_calls + còn budget| C[tools node]
+  C --> B
+  B -->|câu trả lời cuối| D([END])
+  B -->|hết AGENT_MAX_ITERATIONS| E[limit node] --> D
+```
+
+### Các tool
+
+| Tool | Vai trò |
+| --- | --- |
+| `search_products` | Tìm theo từ khóa, danh mục, khoảng giá, tag, tồn kho. Trả về ID + giá + tồn kho. |
+| `get_product` | Xem chi tiết một sản phẩm theo ID. |
+| `search_store_info` | Tra chính sách giao hàng/đổi trả/bảo hành/thanh toán/liên hệ. |
+| `preview_order` | Kiểm tra tồn kho và tính **tạm tính + phí ship + tổng** mà chưa tạo đơn. |
+| `create_order` | Tạo đơn sau khi khách xác nhận; server kiểm tra lại toàn bộ. |
+| `get_order_status` | Tra đơn theo mã. |
+
+`preview_order` là mảnh quan trọng: agent **không tự cộng tiền**. Muốn đọc tổng cho khách thì gọi tool; muốn chốt thì gọi `create_order` và server tính lại.
+
+---
+
+## Luồng chốt đơn
+
+1. Khách chọn sản phẩm + số lượng.
+2. Agent hỏi **họ tên, số điện thoại Việt Nam, địa chỉ giao hàng** (và ghi chú nếu cần). Không hỏi thẻ/OTP/mật khẩu.
+3. Agent gọi `preview_order` → server kiểm tra tồn kho, tính tạm tính, phí ship, tổng.
+4. Agent đọc lại toàn bộ đơn + tổng tiền và hỏi rõ: “Bạn xác nhận đặt đơn này chứ?”.
+5. Chỉ khi khách đồng ý, agent gọi `create_order` với `confirmed=true`.
+6. Server kiểm tra lại stock/giá, tạo mã `ORD-YYYYMMDD-XXXXXX`, ghi file, trừ tồn kho.
+7. Agent trả mã đơn + tổng tiền + hình thức thanh toán.
+
+Server chịu trách nhiệm:
+
+- Chuẩn hoá SĐT Việt Nam (`090 123 4567`, `+84…` → `0901234567`).
+- Validate tên/địa chỉ/ghi chú/số lượng.
+- Kiểm tra sản phẩm tồn tại, cùng currency, còn hàng.
+- Tính subtotal, shipping, total.
+- Mã đơn unique, lưu JSONL, trừ kho.
+- Chống oversell trong một process bằng lock tuần tự.
+- Khi restart, **replay đơn đã lưu** để trừ lại tồn kho từ baseline `products.csv`.
+
+> `confirmed` vẫn do model gửi lên. Prompt + tool description ép agent chỉ gọi sau khi khách đồng ý, nhưng nếu cần chống 100% model gọi sớm, hãy dùng LangGraph `interrupt()`/HITL hoặc nút xác nhận ở UI trước khi gọi `create_order`.
 
 ---
 
@@ -163,19 +254,23 @@ Base URL: `http://localhost:3000`
 
 | Method | Path | Mô tả |
 | --- | --- | --- |
-| `GET` | `/api/health` | Liveness probe |
-| `GET` | `/api/agent/info` | Provider, model, persistence, danh sách tool |
-| `POST` | `/api/agent/chat` | Chạy agent, trả câu trả lời cuối |
-| `POST` | `/api/agent/chat/stream` | Chạy agent, stream SSE |
-| `GET` | `/api/agent/threads/:threadId` | Lịch sử hội thoại |
+| `GET` | `/api/health` | Liveness |
+| `GET` | `/api/agent/info` | Provider, model, store, catalog, tools |
+| `POST` | `/api/agent/chat` | Chat, trả câu trả lời cuối |
+| `POST` | `/api/agent/chat/stream` | Chat + SSE |
+| `GET` | `/api/agent/threads/:threadId` | Lịch sử thread |
 | `DELETE` | `/api/agent/threads/:threadId` | Xoá thread + checkpoints |
+| `GET` | `/api/catalog/products` | Tìm/lọc sản phẩm |
+| `GET` | `/api/catalog/products/:id` | Chi tiết sản phẩm |
+| `GET` | `/api/catalog/categories` | Danh mục |
+| `GET` | `/api/orders/:orderCode` | Tra đơn (SĐT được mask, không trả địa chỉ) |
 
-### Chat (JSON)
+### Tư vấn
 
 ```bash
 curl -s http://localhost:3000/api/agent/chat \
   -H 'content-type: application/json' \
-  -d '{"message":"Tính 12 * (3 + 1) giúp anh"}'
+  -d '{"message":"Tư vấn tai nghe dưới 1 triệu giúp mình"}'
 ```
 
 ```json
@@ -183,241 +278,132 @@ curl -s http://localhost:3000/api/agent/chat \
   "threadId": "6f1a9d6e-3a7b-4f1e-9c2a-4d2e8b7c1a90",
   "message": {
     "role": "assistant",
-    "content": "Kết quả là 48."
+    "content": "Mình gợi ý 2 lựa chọn phù hợp:\n• Tai nghe TrueSound Lite — 490.000 ₫…"
   },
-  "iterations": 2,
-  "usage": { "inputTokens": 812, "outputTokens": 96, "totalTokens": 908 }
+  "iterations": 2
 }
 ```
 
-Gửi lại `threadId` để nối tiếp hội thoại:
+### Chốt đơn
+
+Lượt 1 — khách cung cấp đủ thông tin:
 
 ```bash
 curl -s http://localhost:3000/api/agent/chat \
   -H 'content-type: application/json' \
-  -d '{"message":"Còn 3 * 3 thì sao?","threadId":"6f1a9d6e-3a7b-4f1e-9c2a-4d2e8b7c1a90"}'
+  -d '{
+    "threadId": "demo-order-1",
+    "message": "Mình muốn mua SP001, tên: Nguyễn Văn A, sđt: 0901234567, địa chỉ: 123 Lê Lợi, Quận 1, TP.HCM"
+  }'
 ```
 
-### Chat (SSE)
+Agent trả **đơn nháp** + tổng tiền + câu hỏi xác nhận. Lượt 2:
+
+```bash
+curl -s http://localhost:3000/api/agent/chat \
+  -H 'content-type: application/json' \
+  -d '{"threadId":"demo-order-1","message":"Đồng ý"}'
+```
+
+Kết quả có mã đơn, ví dụ `ORD-20261023-A1B2C3`. Tra đơn:
+
+```bash
+curl -s http://localhost:3000/api/orders/ORD-20261023-A1B2C3
+```
+
+### SSE streaming
 
 ```bash
 curl -N http://localhost:3000/api/agent/chat/stream \
   -H 'content-type: application/json' \
-  -d '{"message":"Mấy giờ ở Hà Nội rồi?"}'
+  -d '{"message":"Tư vấn tai nghe bluetooth"}'
 ```
 
-```text
-event: meta
-data: {"type":"meta","threadId":"…","provider":"openai","model":"gpt-4o-mini"}
+Các event: `meta`, `token`, `tool_start`, `tool_end`, `done`, `error`. Mỗi frame có JSON kèm `type` để client dùng `fetch` stream hoặc `EventSource` đều được.
 
-event: tool_start
-data: {"type":"tool_start","name":"current_time","input":{"timezone":"Asia/Ho_Chi_Minh"}}
-
-event: tool_end
-data: {"type":"tool_end","name":"current_time","output":"{…}"}
-
-event: token
-data: {"type":"token","content":"Bây"}
-
-event: done
-data: {"type":"done","threadId":"…","message":{…},"iterations":2,"usage":{…},"durationMs":1840}
-```
-
-Mỗi frame có cả `event:` và JSON `type` để client dùng `EventSource` hoặc `fetch` stream đều được.
-
-### Lịch sử & xoá thread
+### Catalog
 
 ```bash
-curl -s http://localhost:3000/api/agent/threads/<threadId>
-curl -s -X DELETE http://localhost:3000/api/agent/threads/<threadId>
+curl 'http://localhost:3000/api/catalog/products?q=tai%20nghe&maxPrice=1000000&limit=5'
+curl 'http://localhost:3000/api/catalog/products/SP001'
+curl 'http://localhost:3000/api/catalog/categories'
 ```
-
-`threadId` do server sinh (UUID) nếu client không truyền. Chỉ chấp nhận `[A-Za-z0-9_-]{1,128}`.
-
----
-
-## LangGraph hoạt động thế nào
-
-### 1. State có reducer
-
-[`src/agent/agent.graph.ts`](src/agent/agent.graph.ts):
-
-```ts
-const AgentState = Annotation.Root({
-  messages: Annotation<BaseMessage[], BaseMessage | BaseMessage[]>({
-    reducer: messagesStateReducer,
-    default: () => [],
-  }),
-  iterations: Annotation<number>({
-    reducer: (_previous, next) => next,
-    default: () => 0,
-  }),
-});
-```
-
-- `messages` dùng `messagesStateReducer`: append message mới, dedupe theo id, hỗ trợ `RemoveMessage`.
-- `iterations` là bộ đếm model calls, dùng cho loop guard.
-
-### 2. Node và conditional edge
-
-```ts
-new StateGraph(AgentState)
-  .addNode('agent', callModel)
-  .addNode('tools', toolNode)
-  .addNode('limit', stopAtLimit)
-  .addEdge(START, 'agent')
-  .addConditionalEdges('agent', routeAfterAgent, ['tools', 'limit', END])
-  .addEdge('tools', 'agent')
-  .addEdge('limit', END)
-  .compile({ checkpointer });
-```
-
-`routeAfterAgent` kiểm tra **message cuối có `tool_calls` không** và **đã chạm `AGENT_MAX_ITERATIONS` chưa**. Đây là guard bắt buộc với mọi agent loop.
-
-### 3. Streaming-first
-
-Node `agent` gọi `model.stream()` rồi aggregate chunks, thay vì `invoke()`. Nhờ vậy `graph.streamEvents(..., { version: 'v2' })` phát ra `on_chat_model_stream` cho **mọi** model — kể cả mock model — và SSE có token theo thời gian thực.
-
-### 4. Checkpointer = bộ nhớ hội thoại
-
-Mỗi run truyền `configurable.thread_id`; checkpointer lưu toàn bộ state sau từng super-step. Lượt sau chỉ cần gửi thêm `HumanMessage`, graph tự nối lịch sử. Không cần tự quản lý mảng messages trong DB.
-
-Muốn thêm long-term memory (facts xuyên thread), thêm LangGraph `Store` — điểm mở rộng tự nhiên là `AgentService`/`createAgentGraph`.
-
----
-
-## Thêm tool mới
-
-Ví dụ tool tra tỷ giá (minh hoạ cấu trúc):
-
-```ts
-// src/tools/exchange-rate.tool.ts
-import { tool } from '@langchain/core/tools';
-import { z } from 'zod';
-
-export const exchangeRateTool = tool(
-  async ({ base, quote }) => {
-    const response = await fetch(`https://api.example.com/rate?from=${base}&to=${quote}`);
-    if (!response.ok) return `Lookup failed with HTTP ${response.status}`;
-    const data = (await response.json()) as { rate: number };
-    return `1 ${base} = ${data.rate} ${quote}`;
-  },
-  {
-    name: 'get_exchange_rate',
-    description: 'Get the current exchange rate between two currencies.',
-    schema: z.object({
-      base: z.string().length(3).describe('ISO 4217 code, e.g. USD'),
-      quote: z.string().length(3).describe('ISO 4217 code, e.g. VND'),
-    }),
-  },
-);
-```
-
-Đăng ký trong [`src/tools/tools.service.ts`](src/tools/tools.service.ts):
-
-```ts
-this.toolList = [
-  calculatorTool,
-  createCurrentTimeTool(timezone),
-  weatherTool,
-  exchangeRateTool, // ← thêm ở đây
-] as unknown as StructuredToolInterface[];
-```
-
-Graph, API và UI tự nhận tool mới. Lưu ý:
-
-- `description` và `.describe()` là một phần prompt — viết rõ để model chọn đúng tool.
-- Tool nên **trả về string** (hoặc nội dung serialize được) và **không throw** ra ngoài; trả message lỗi để agent tự xử lý. `ToolNode` đang bật `handleToolErrors: true`.
-- Không đặt secret trong mô tả tool.
-
-Đổi prompt: sửa [`agent.prompt.ts`](src/agent/agent.prompt.ts) hoặc đặt `AGENT_SYSTEM_PROMPT` trong `.env`. Prompt runtime (ngày giờ, budget) luôn được nối thêm.
-
----
-
-## Memory & Postgres
-
-Mặc định `DATABASE_URL` trống → `MemorySaver` (mất lịch sử khi restart, phù hợp dev/test).
-
-Bật persistence thật:
-
-```bash
-docker compose up -d db
-```
-
-```dotenv
-DATABASE_URL=postgresql://agent:agent@localhost:5432/agent
-```
-
-Restart app. `PostgresSaver.setup()` tự tạo schema/tables (`checkpoints`, `checkpoint_blobs`, `checkpoint_writes`, `checkpoint_migrations`) — idempotent, chạy mỗi lần boot.
-
-Kiểm tra:
-
-```bash
-curl -s http://localhost:3000/api/agent/info   # persistence: "postgres"
-```
-
-Lưu ý vận hành:
-
-- Connection pool mặc định 10 (`DB_POOL_MAX`).
-- Dùng managed Postgres thì thêm `?sslmode=require` vào URL nếu provider yêu cầu.
-- Checkpoint có thể lớn theo độ dài hội thoại; với app thật nên có retention/cleanup hoặc tóm tắt lịch sử.
-- `DELETE /api/agent/threads/:id` gọi `checkpointer.deleteThread()`.
 
 ---
 
 ## Cấu hình
 
-Tất cả biến được validate bằng Zod khi boot ([`src/config/env.validation.ts`](src/config/env.validation.ts)). Sai định dạng → app fail-fast với message rõ ràng.
+Validate bằng Zod khi boot; sai định dạng → fail-fast với message rõ ràng.
 
 | Biến | Mặc định | Ý nghĩa |
 | --- | --- | --- |
 | `NODE_ENV` | `development` | `development` / `test` / `production` |
 | `PORT` | `3000` | HTTP port |
-| `CORS_ORIGINS` | `*` | Danh sách origin, phân tách bằng dấu phẩy |
-| `LLM_PROVIDER` | auto | `openai` hoặc `mock`; auto = openai nếu có key, ngược lại mock |
+| `CORS_ORIGINS` | `*` | Origin được phép, phân tách bằng dấu phẩy |
+| `LLM_PROVIDER` | auto | `openai` hoặc `mock`; auto theo API key |
 | `OPENAI_API_KEY` | — | Bắt buộc khi provider `openai` |
 | `OPENAI_BASE_URL` | — | Endpoint OpenAI-compatible |
 | `OPENAI_MODEL` | `gpt-4o-mini` | Tên model |
 | `LLM_TEMPERATURE` | `0.2` | 0–2 |
 | `LLM_MAX_TOKENS` | `1024` | Giới hạn output |
-| `AGENT_MAX_ITERATIONS` | `8` | Số model call tối đa mỗi run (1–20) |
-| `AGENT_SYSTEM_PROMPT` | built-in | Override system prompt |
-| `DEFAULT_TIMEZONE` | `Asia/Ho_Chi_Minh` | Timezone mặc định cho tool thời gian |
+| `AGENT_MAX_ITERATIONS` | `8` | Số model call tối đa mỗi lượt |
+| `AGENT_SYSTEM_PROMPT` | built-in | Override prompt bán hàng |
+| `STORE_NAME` | `NestShop` | Tên shop (UI + prompt) |
+| `STORE_HOTLINE` | — | Hotline hiển thị trong prompt |
+| `STORE_EMAIL` | — | Email |
+| `STORE_ADDRESS` | — | Địa chỉ shop |
+| `PRODUCTS_FILE` | `./data/products.csv` | File catalog |
+| `STORE_INFO_FILE` | `./data/store-info.md` | File chính sách |
+| `ORDERS_FILE` | `./data/orders/orders.jsonl` | Nơi lưu đơn |
+| `ORDER_PREFIX` | `ORD` | Prefix mã đơn (2–8 ký tự) |
+| `MAX_ORDER_ITEMS` | `20` | Số dòng sản phẩm tối đa/đơn |
+| `SHIPPING_FEE` | `30000` | Phí ship (VND) |
+| `FREE_SHIPPING_THRESHOLD` | `500000` | Ngưỡng freeship (0 = luôn thu phí) |
 | `DATABASE_URL` | — | Bật Postgres checkpointer |
 | `DB_POOL_MAX` | `10` | Pool size |
-| `SWAGGER_ENABLED` | `true` | Bật/tắt `/docs` |
+| `SWAGGER_ENABLED` | `true` | Bật `/docs` |
 | `LANGCHAIN_TRACING_V2` | — | `true` để bật LangSmith |
-| `LANGCHAIN_API_KEY` | — | LangSmith API key |
-| `LANGCHAIN_PROJECT` | — | Tên project trên LangSmith |
+| `LANGCHAIN_API_KEY` | — | LangSmith key |
+| `LANGCHAIN_PROJECT` | — | Tên project LangSmith |
+
+---
+
+## Dữ liệu & quyền riêng tư
+
+- Đơn hàng lưu tại `data/orders/orders.jsonl`, chứa **PII thật** (tên, SĐT, địa chỉ). File này đã nằm trong `.gitignore` và `.dockerignore`.
+- Docker dùng named volume `orders` để đơn không mất khi recreate container.
+- `GET /api/agent/threads/:id` trả lịch sử; với tool call `create_order`, SĐT được mask và địa chỉ đổi thành `[hidden]`.
+- `GET /api/orders/:code` chỉ trả SĐT đã mask, không trả địa chỉ.
+- Tool card trên UI cũng mask SĐT/địa chỉ.
+- **Chưa có auth**: bất kỳ ai biết `threadId` có thể đọc lịch sử chat của thread đó. Trước khi public, thêm auth/authorization cho `/api/agent/*` và gắn thread với user.
+- Không log nội dung PII; lỗi server chỉ log stack/mã lỗi.
 
 ---
 
 ## Test
 
 ```bash
-pnpm test        # unit (evaluator, …)
-pnpm test:e2e    # boot Nest app + gọi API thật qua supertest
-pnpm test:cov    # coverage
+pnpm test        # 28 unit tests
+pnpm test:e2e    # 8 e2e tests (boot Nest app + gọi API thật)
+pnpm test:cov
 pnpm lint
 pnpm typecheck
 pnpm build
 ```
 
-E2E ([`test/agent.e2e-spec.ts`](test/agent.e2e-spec.ts)) chạy với `LLM_PROVIDER=mock`, `DATABASE_URL` rỗng và cover:
+Coverage chính:
 
-- health + info
-- chat gọi tool và trả kết quả
-- multi-turn memory + history + delete
-- SSE có `meta`, `tool_start`, `token`, `done`
-- validation body/param (400)
-
-Evaluator test ([`expression-evaluator.spec.ts`](src/tools/expression-evaluator.spec.ts)) đảm bảo calculator **không dùng `eval()`** và chặn input độc hại.
+- Parse CSV/JSON, header tiếng Việt, price formats, duplicate ID, dòng lỗi.
+- Search theo từ khóa/giá/danh mục/tồn kho.
+- Preview tính tiền, freeship, validate SĐT, stock, lock chống oversell.
+- Persist đơn, mask PII, replay stock khi restart.
+- E2E: health/info, catalog, chat tư vấn, policy, **preview → Đồng ý → tạo đơn**, tra đơn, SSE, validation.
 
 ---
 
 ## Docker
 
-Chạy full stack (app + Postgres):
+Chạy full stack:
 
 ```bash
 cp .env.example .env
@@ -425,78 +411,97 @@ docker compose up --build
 ```
 
 - UI: <http://localhost:3000/ui/>
-- API docs: <http://localhost:3000/docs>
-- Compose tự set `DATABASE_URL` trỏ tới service `db`.
+- Swagger: <http://localhost:3000/docs>
+- Postgres: service `db`; checkpointer dùng `DATABASE_URL` tự động.
+- `data/products.csv` và `data/store-info.md` được mount read-only → sửa file rồi `docker compose restart app` là áp dụng.
+- Đơn hàng nằm trong volume `orders`.
+- Image chạy user `node`, có healthcheck.
 
 Chỉ chạy Postgres cho dev local:
 
 ```bash
 docker compose up -d db
+# .env: DATABASE_URL=postgresql://agent:agent@localhost:5432/agent
 ```
-
-Sau đó đặt `DATABASE_URL=postgresql://agent:agent@localhost:5432/agent` trong `.env`.
-
-Dockerfile là multi-stage, chạy bằng user `node`, có healthcheck.
 
 ---
 
 ## Cấu trúc thư mục
 
 ```text
+data/
+├── products.csv                 # catalog mẫu — thay bằng file thật
+├── store-info.md                # chính sách mẫu — thay bằng chính sách thật
+└── orders/                       # JSONL đơn hàng (gitignored, chứa PII)
+
 src/
-├── main.ts                     # bootstrap HTTP
-├── app.module.ts               # Config, static UI, health, agent
-├── app.setup.ts                # pipes/CORS/Swagger dùng chung cho main + e2e
-├── config/
-│   └── env.validation.ts       # schema Zod cho toàn bộ env
+├── catalog/
+│   ├── catalog.loader.ts         # CSV/JSON parser + alias cột tiếng Việt
+│   ├── catalog.service.ts        # search, filter, stock, stats
+│   ├── catalog.tools.ts          # search_products, get_product
+│   ├── catalog.controller.ts     # /api/catalog
+│   └── dto/
+├── orders/
+│   ├── order.service.ts          # preview/create, validate, JSONL, stock
+│   ├── order.tools.ts            # preview_order, create_order, get_order_status
+│   ├── order.controller.ts       # /api/orders/:code
+│   └── dto/
+├── store-info/
+│   ├── store-info.service.ts     # đọc markdown + search section
+│   └── store-info.tools.ts       # search_store_info
 ├── agent/
-│   ├── agent.controller.ts     # REST + SSE endpoints
-│   ├── agent.service.ts        # chạy graph, history, stream, lỗi
-│   ├── agent.graph.ts          # StateGraph, nodes, conditional edges
-│   ├── agent.prompt.ts         # system prompt + runtime context
-│   ├── agent.types.ts          # DTO/event types
-│   ├── chat-model.service.ts   # ChatOpenAI hoặc MockChatModel
-│   ├── checkpointer.service.ts # MemorySaver / PostgresSaver
-│   ├── message.utils.ts        # map message → JSON, usage, final answer
-│   ├── models/
-│   │   └── mock-chat.model.ts  # model offline deterministic
-│   └── dto/                    # request/response DTO + Swagger decorators
-├── tools/
-│   ├── calculator.tool.ts
-│   ├── current-time.tool.ts
-│   ├── weather.tool.ts
-│   ├── expression-evaluator.ts # parser an toàn, không eval()
-│   └── tools.service.ts        # registry duy nhất
-└── health/
-public/index.html              # demo chat UI (không build step)
+│   ├── agent.graph.ts            # StateGraph loop + guard
+│   ├── agent.service.ts          # run/stream/history
+│   ├── agent.prompt.ts           # prompt bán hàng + guardrails
+│   ├── models/mock-chat.model.ts # mock model offline
+│   ├── message.utils.ts          # map message, mask PII
+│   └── ...
+├── tools/tools.service.ts        # registry tool
+├── config/env.validation.ts
+└── ...
+public/index.html                # demo UI
 test/agent.e2e-spec.ts
 ```
 
-**Vì sao import có đuôi `.js`?** NestJS 12 dùng ESM (`"type": "module"`). TypeScript NodeNext yêu cầu relative import ghi rõ `.js` dù source là `.ts`. Đừng xoá đuôi này.
-
 ---
 
-## Lên production
+## Tùy chỉnh & mở rộng
 
-Repo này là **starter**, chưa kèm auth. Trước khi public:
+### Thêm tool
 
-1. **Auth**: thêm API key/JWT guard cho `/api/agent/*`; truyền user id vào thread metadata để tránh lộ chéo hội thoại.
-2. **Rate limit**: `@nestjs/throttler` theo IP/user; giới hạn độ dài message và số thread.
-3. **Persistence**: bật `DATABASE_URL`, backup, retention cho checkpoints; không dùng `MemorySaver`.
-4. **CORS**: đặt origin cụ thể, không để `*` nếu có cookie/auth.
-5. **Observability**: bật LangSmith, log `threadId`/latency/token usage, thêm metrics + tracing.
-6. **Resilience**: timeout cho tool HTTP, retry có giới hạn, circuit breaker cho provider; giữ `AGENT_MAX_ITERATIONS` thấp.
-7. **SSE qua proxy**: tắt buffering (`proxy_buffering off` với nginx); app đã set `X-Accel-Buffering: no`. Tăng idle timeout của LB.
-8. **Secrets**: inject qua secret manager, không commit `.env`.
-9. **Cost**: đặt `LLM_MAX_TOKENS`, theo dõi usage, có thể chọn model rẻ cho routing và model mạnh cho câu trả lời.
+```ts
+import { tool } from '@langchain/core/tools';
+import { z } from 'zod';
 
-Gợi ý mở rộng kiến trúc:
+export const checkVoucherTool = tool(
+  async ({ code }) => {
+    // gọi DB/API thật, trả string
+    return JSON.stringify({ code, valid: code === 'WELCOME10', discount: 10 });
+  },
+  {
+    name: 'check_voucher',
+    description: 'Validate a discount voucher code before applying it to an order.',
+    schema: z.object({ code: z.string().min(2).max(30) }),
+  },
+);
+```
 
-- **Human-in-the-loop**: dùng `interrupt()` trước tool nguy hiểm (write DB, gửi email) và resume bằng `Command`.
-- **Multi-agent**: thêm subgraph (researcher/critic) làm node; giữ supervisor graph nhỏ.
-- **RAG**: thêm retriever tool (pgvector) — giữ nguyên contract `tool()`.
-- **Structured output**: dùng `withStructuredOutput()` ở một node riêng.
-- **Long-term memory**: LangGraph `Store` + namespace theo user.
+Thêm vào registry [`src/tools/tools.service.ts`](src/tools/tools.service.ts). Nhớ cập nhật prompt nếu tool cần được gọi theo quy trình.
+
+### Đổi prompt
+
+Sửa [`src/agent/agent.prompt.ts`](src/agent/agent.prompt.ts) hoặc đặt `AGENT_SYSTEM_PROMPT`. Prompt hiện tại đã có guardrail: không bịa giá/tồn kho, không hỏi OTP/thẻ, chỉ tạo đơn sau xác nhận.
+
+### Gợi ý nâng cấp
+
+- **Human-in-the-loop**: dùng `interrupt()` trước `create_order` để nhân viên/khách xác nhận qua UI.
+- **Đơn hàng thật**: thay JSONL bằng Postgres/MySQL, transaction + idempotency key + payment gateway.
+- **Tồn kho thật**: sync POS/ERP; bỏ replay baseline.
+- **Voucher/khuyến mãi**: thêm tool + bảng giá.
+- **Giao hàng**: tích hợp GHN/GHTK/Viettel Post để tính phí theo địa chỉ.
+- **Handoff**: tool `escalate_to_human` + thông báo Zalo/Slack.
+- **Đa ngôn ngữ**: prompt đã yêu cầu trả lời theo ngôn ngữ khách.
+- **RAG chính sách dài**: thay keyword search bằng vector store/pgvector khi file lớn.
 
 ---
 
@@ -504,15 +509,46 @@ Gợi ý mở rộng kiến trúc:
 
 | Lỗi | Nguyên nhân / cách xử lý |
 | --- | --- |
-| `OPENAI_API_KEY is required when LLM_PROVIDER=openai` | Đặt key, hoặc đổi `LLM_PROVIDER=mock` |
-| `401` / `invalid_api_key` từ provider | Key sai/hết hạn; kiểm tra `OPENAI_BASE_URL` có đúng `/v1` |
-| Agent không gọi tool | Model không hỗ trợ tool calling, hoặc `description`/schema chưa đủ rõ |
-| `Weather lookup failed` | Máy không có internet hoặc Open-Meteo timeout; tool trả lỗi để agent xử lý |
-| SSE chỉ hiện một cục text | Proxy đang buffer; tắt buffering hoặc kiểm tra `Content-Type: text/event-stream` |
-| Mất lịch sử sau restart | Đang dùng `MemorySaver`; set `DATABASE_URL` |
-| `ERR_MODULE_NOT_FOUND` | Thiếu đuôi `.js` ở relative import (ESM) |
-| `[ERR_PNPM_IGNORED_BUILDS]` | Cảnh báo build script của dependency; có thể chạy `pnpm approve-builds` nếu cần |
-| Port 3000 đã dùng | `PORT=3100 pnpm dev` |
+| `Product file not found` | Sai `PRODUCTS_FILE` hoặc chưa có `data/products.csv`; đường dẫn tính từ thư mục chạy app |
+| `no valid products found` | Thiếu cột `tên`/`giá`, giá không parse được, hoặc file rỗng |
+| `Duplicate product id` | Sửa ID trùng trong file catalog |
+| Agent tư vấn sai/không tìm thấy | Thêm `tags`, mô tả rõ; thử `category`/`maxPrice`; xem tool result trong UI |
+| `OPENAI_API_KEY is required` | Đặt key hoặc đổi `LLM_PROVIDER=mock` |
+| `401` từ provider | Key sai/hết hạn; kiểm tra `OPENAI_BASE_URL` |
+| SĐT không hợp lệ | Dùng 10 số bắt đầu bằng 0, hoặc `+84…`; server tự chuẩn hoá |
+| `Order ... was not found` | Mã đơn sai hoặc file orders đã bị xoá |
+| Tồn kho sai sau restart | `products.csv` là baseline; đơn trong `data/orders` được replay. Nếu sửa tay stock, cần đồng bộ lại orders |
+| SSE bị buffer | Tắt proxy buffering; app đã set `X-Accel-Buffering: no` |
+| `ERR_MODULE_NOT_FOUND` | Relative import ESM phải có đuôi `.js` |
+| `[ERR_PNPM_IGNORED_BUILDS]` | Warning build script của dependency; có thể `pnpm approve-builds` nếu cần |
+
+---
+
+## Lên production
+
+Repo này là **starter**, chưa đủ để chạy production cho khách thật. Checklist tối thiểu:
+
+1. **Auth**: JWT/API key cho `/api/agent/*`, gắn thread với user; chặn đọc chéo lịch sử.
+2. **Rate limit + abuse**: `@nestjs/throttler`, giới hạn độ dài message, số thread, số đơn/ngày.
+3. **Xác nhận đơn**: dùng HITL/UI confirmation thay vì tin hoàn toàn vào `confirmed` của model.
+4. **Đơn hàng & tồn kho**: DB transaction, idempotency, payment gateway, huỷ/hoàn tiền, đồng bộ kho.
+5. **PII**: mã hoá file/DB, retention, quyền truy cập, xoá theo yêu cầu, không log SĐT/địa chỉ.
+6. **Thông báo**: SMS/Zalo/email xác nhận đơn; webhook cho shop.
+7. **Observability**: LangSmith, log `threadId`/latency/token usage, alert lỗi tool/order.
+8. **Prompt safety**: coi nội dung khách là untrusted; không để prompt injection lộ dữ liệu/tool.
+9. **Pháp lý**: chính sách đổi trả, bảo mật, đồng ý thu thập dữ liệu.
+10. **Kiểm thử**: eval bộ câu hỏi thật, test đơn/stock, theo dõi hallucination.
+
+Gợi ý thay `OrderService` bằng repository DB + transaction:
+
+```text
+BEGIN
+  SELECT ... FOR UPDATE  (khoá sản phẩm)
+  kiểm tra stock
+  INSERT order + order_items
+  UPDATE stock
+COMMIT
+```
 
 ---
 

@@ -14,14 +14,14 @@ describe('ChatModelService', () => {
     const service = new ChatModelService(
       config({
         GEMINI_API_KEY: 'fake-key',
-        GEMINI_MODEL: 'gemini-2.5-flash',
+        GEMINI_MODEL: 'gemini-3.8-flash',
         LLM_TEMPERATURE: 0.2,
         LLM_MAX_TOKENS: 1024,
       }),
     );
 
     expect(service.provider).toBe('gemini');
-    expect(service.modelName).toBe('gemini-2.5-flash');
+    expect(service.modelName).toBe('gemini-3.8-flash');
     expect(service.model).toBeDefined();
   });
 

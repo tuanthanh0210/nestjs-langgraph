@@ -16,7 +16,7 @@ describe('validateEnv', () => {
     expect(env.SHIPPING_FEE).toBe(30_000);
     expect(env.FREE_SHIPPING_THRESHOLD).toBe(500_000);
     expect(env.ORDER_PREFIX).toBe('ORD');
-    expect(env.GEMINI_MODEL).toBe('gemini-2.5-flash');
+    expect(env.GEMINI_MODEL).toBe('gemini-3.8-flash');
   });
 
   it('requires an API key when the openai provider is explicit', () => {

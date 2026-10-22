@@ -89,10 +89,10 @@ Lấy key tại <https://aistudio.google.com/apikey>, rồi:
 ```dotenv
 LLM_PROVIDER=gemini
 GEMINI_API_KEY=...
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.8-flash
 ```
 
-`gemini-2.5-flash` là mặc định (nhanh, rẻ, đủ tốt cho tư vấn/đặt hàng). Có thể đổi sang `gemini-2.5-pro` nếu cần suy luận sâu hơn.
+`gemini-3.8-flash` là mặc định (nhanh, rẻ, đủ tốt cho tư vấn/đặt hàng). Có thể đổi sang model Pro tương ứng nếu tài khoản của anh hỗ trợ.
 
 ### DeepSeek
 
@@ -361,7 +361,7 @@ Validate bằng Zod khi boot; sai định dạng → fail-fast với message rõ
 | `OPENAI_BASE_URL` | — | Endpoint OpenAI-compatible |
 | `OPENAI_MODEL` | `gpt-4o-mini` | Tên model OpenAI |
 | `GEMINI_API_KEY` | — | Bắt buộc khi provider `gemini` |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | Tên model Gemini |
+| `GEMINI_MODEL` | `gemini-3.8-flash` | Tên model Gemini |
 | `LLM_TEMPERATURE` | `0.2` | 0–2 |
 | `LLM_MAX_TOKENS` | `1024` | Giới hạn output |
 | `AGENT_MAX_ITERATIONS` | `8` | Số model call tối đa mỗi lượt |

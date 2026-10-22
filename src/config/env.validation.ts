@@ -46,7 +46,7 @@ const envSchema = z
     OPENAI_BASE_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
     OPENAI_MODEL: z.string().min(1).default('gpt-4o-mini'),
     GEMINI_API_KEY: optionalString,
-    GEMINI_MODEL: z.string().min(1).default('gemini-2.5-flash'),
+    GEMINI_MODEL: z.string().min(1).default('gemini-3.8-flash'),
     LLM_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
     LLM_MAX_TOKENS: z.coerce.number().int().min(1).max(32_768).default(1024),
 

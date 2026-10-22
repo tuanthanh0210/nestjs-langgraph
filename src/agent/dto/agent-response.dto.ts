@@ -87,8 +87,8 @@ export class CatalogInfoDto {
 }
 
 export class AgentInfoDto {
-  @ApiProperty({ enum: ['openai', 'mock'], example: 'openai' })
-  provider!: 'openai' | 'mock';
+  @ApiProperty({ enum: ['openai', 'gemini', 'mock'], example: 'gemini' })
+  provider!: 'openai' | 'gemini' | 'mock';
 
   @ApiProperty({ example: 'gpt-4o-mini' })
   model!: string;

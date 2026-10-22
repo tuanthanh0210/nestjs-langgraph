@@ -41,10 +41,12 @@ const envSchema = z
     CORS_ORIGINS: z.string().min(1).default('*'),
 
     // LLM ------------------------------------------------------------------
-    LLM_PROVIDER: z.enum(['openai', 'mock']).optional(),
+    LLM_PROVIDER: z.enum(['openai', 'gemini', 'mock']).optional(),
     OPENAI_API_KEY: optionalString,
     OPENAI_BASE_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
     OPENAI_MODEL: z.string().min(1).default('gpt-4o-mini'),
+    GEMINI_API_KEY: optionalString,
+    GEMINI_MODEL: z.string().min(1).default('gemini-2.5-flash'),
     LLM_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
     LLM_MAX_TOKENS: z.coerce.number().int().min(1).max(32_768).default(1024),
 
@@ -94,6 +96,13 @@ const envSchema = z
         code: 'custom',
         path: ['OPENAI_API_KEY'],
         message: 'OPENAI_API_KEY is required when LLM_PROVIDER=openai',
+      });
+    }
+    if (env.LLM_PROVIDER === 'gemini' && !env.GEMINI_API_KEY) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['GEMINI_API_KEY'],
+        message: 'GEMINI_API_KEY is required when LLM_PROVIDER=gemini',
       });
     }
   });

@@ -16,10 +16,21 @@ describe('validateEnv', () => {
     expect(env.SHIPPING_FEE).toBe(30_000);
     expect(env.FREE_SHIPPING_THRESHOLD).toBe(500_000);
     expect(env.ORDER_PREFIX).toBe('ORD');
+    expect(env.GEMINI_MODEL).toBe('gemini-2.5-flash');
   });
 
   it('requires an API key when the openai provider is explicit', () => {
     expect(() => validateEnv({ LLM_PROVIDER: 'openai' })).toThrow(/OPENAI_API_KEY/);
+  });
+
+  it('supports Google Gemini', () => {
+    expect(() => validateEnv({ LLM_PROVIDER: 'gemini' })).toThrow(/GEMINI_API_KEY/);
+    const env = validateEnv({
+      LLM_PROVIDER: 'gemini',
+      GEMINI_API_KEY: 'fake-key',
+      GEMINI_MODEL: 'gemini-2.5-pro',
+    });
+    expect(env.GEMINI_MODEL).toBe('gemini-2.5-pro');
   });
 
   it('accepts an OpenAI-compatible base URL', () => {

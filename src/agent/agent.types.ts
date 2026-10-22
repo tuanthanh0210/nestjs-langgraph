@@ -39,7 +39,7 @@ export interface CatalogInfo {
 }
 
 export interface AgentInfo {
-  provider: 'openai' | 'mock';
+  provider: 'openai' | 'gemini' | 'mock';
   model: string;
   persistence: 'memory' | 'postgres';
   maxIterations: number;
@@ -60,7 +60,7 @@ export type AgentStreamEvent =
   | {
       type: 'meta';
       threadId: string;
-      provider: 'openai' | 'mock';
+      provider: 'openai' | 'gemini' | 'mock';
       model: string;
     }
   | { type: 'token'; content: string }

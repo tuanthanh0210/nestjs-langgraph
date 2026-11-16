@@ -18,6 +18,8 @@
 ^\.vscode/
 ^\.idea/
 ^\.devcontainer/
-^\.claude/(settings(\.local)?\.json$|hooks/|agents/|commands/|skills/)
+^\.claude/
+^\.cursor/
 ^\.mcp\.json$
-(^|/)(CLAUDE|AGENTS)\.md$
+(^|/)CLAUDE(\.local)?\.md$
+(^|/)AGENTS\.md$

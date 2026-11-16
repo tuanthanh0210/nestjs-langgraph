@@ -1,0 +1,31 @@
+name: Registry Probe
+
+# Temporary diagnostic. Shows what a GitHub-hosted runner receives from the
+# Semgrep registry and which counting method reads it correctly. Holds no
+# secrets, checks out nothing, and is never merged.
+on:
+  pull_request:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Probe Semgrep registry responses
+        run: |
+          yq --version || echo "yq missing"
+          jq --version || echo "jq missing"
+          for pack in typescript javascript nodejs expressjs owasp-top-ten github-actions dockerfile; do
+            f="$RUNNER_TEMP/${pack}.yml"
+            meta="$(curl --silent --show-error --max-time 60 --retry 3 --output "$f" \
+              --write-out '%{http_code} %{content_type} %{size_download}' "https://semgrep.dev/c/p/${pack}")"
+            dash="$(grep -c -E '^- id:' "$f" || true)"
+            indented="$(grep -c -E '^ +- id:' "$f" || true)"
+            json="$(grep -o '"id":' "$f" | wc -l)"
+            parsed="$(yq '.rules | length' "$f" 2>&1 | head -1)"
+            echo "${pack}: ${meta} | dash-id=${dash} indented-id=${indented} json-id=${json} yq-rules=${parsed} sha=$(sha256sum "$f" | cut -c1-12)"
+            echo "    head: $(head -c 140 "$f" | tr '\n' '~')"
+          done

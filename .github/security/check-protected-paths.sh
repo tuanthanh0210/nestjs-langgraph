@@ -34,8 +34,13 @@ done < <(git -C "$pr_dir" diff --no-renames --no-ext-diff --no-textconv --raw -z
 
 if (( violations > 0 )); then
   printf '\n%d change(s) touch CI, scanner configuration, install hooks or developer-tool hooks.\n' "$violations"
-  printf 'These can disable or bypass the security checks, so this PR cannot pass automatically.\n'
-  printf 'A maintainer must review the change and merge it through the ruleset bypass.\n'
+  printf 'These can disable or bypass the security checks, so this PR cannot pass automatically.\n\n'
+  printf 'If the change is intended:\n'
+  printf '  1. Keep it in its own small PR with no application code mixed in.\n'
+  printf '  2. A repository admin reviews every listed file line by line.\n'
+  printf '  3. The admin merges with "Merge without waiting for requirements to be met (bypass rules)".\n'
+  printf '     The bypass is recorded in the ruleset insights audit log.\n'
+  printf 'Re-running this job will not change the result; there is no label or comment override.\n'
   exit 1
 fi
 

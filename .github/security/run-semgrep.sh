@@ -10,9 +10,9 @@ image="${SEMGREP_IMAGE:?SEMGREP_IMAGE is required}"
 rules_abs="$(cd "$(dirname "$rules_path")" && pwd)/$(basename "$rules_path")"
 
 exclude_args=()
-for rule_id in ${SEMGREP_EXCLUDE_RULES:-}; do
-  [[ "$rule_id" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "invalid rule id in SEMGREP_EXCLUDE_RULES" >&2; exit 2; }
-  exclude_args+=(--exclude-rule "$rule_id")
+for exclude_path in ${SEMGREP_EXCLUDE_PATHS:-}; do
+  [[ "$exclude_path" =~ ^/[A-Za-z0-9._/-]+$ ]] || { echo "invalid path in SEMGREP_EXCLUDE_PATHS" >&2; exit 2; }
+  exclude_args+=(--exclude "$exclude_path")
 done
 
 token="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"

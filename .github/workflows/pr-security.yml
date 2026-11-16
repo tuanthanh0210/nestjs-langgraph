@@ -60,7 +60,7 @@ jobs:
 
       - name: Semgrep SAST (full PR tree, offline container)
         env:
-          SEMGREP_EXCLUDE_RULES: yaml.github-actions.security.pull-request-target-code-checkout.pull-request-target-code-checkout
+          SEMGREP_EXCLUDE_PATHS: /.github/workflows/pr-security.yml
         run: bash trusted/.github/security/run-semgrep.sh pr "$RUNNER_TEMP/sast-rules"
 
   malware-rules:

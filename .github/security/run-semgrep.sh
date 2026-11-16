@@ -11,7 +11,9 @@ rules_abs="$(cd "$(dirname "$rules_path")" && pwd)/$(basename "$rules_path")"
 
 exclude_args=()
 for exclude_path in ${SEMGREP_EXCLUDE_PATHS:-}; do
-  [[ "$exclude_path" =~ ^/[A-Za-z0-9._/-]+$ ]] || { echo "invalid path in SEMGREP_EXCLUDE_PATHS" >&2; exit 2; }
+  [[ "$exclude_path" =~ ^(/[A-Za-z0-9._-]+)+$ &&! "$exclude_path" =~ /\.\.?(/|$) ]] \
+    || { echo "invalid path in SEMGREP_EXCLUDE_PATHS: must be an absolute repo path without . or .. segments" >&2; exit 2; }
+  [[ -f "${pr_dir}${exclude_path}" ]] || { echo "SEMGREP_EXCLUDE_PATHS entry is not a file in the PR tree: ${exclude_path}" >&2; exit 2; }
   exclude_args+=(--exclude "$exclude_path")
 done
 

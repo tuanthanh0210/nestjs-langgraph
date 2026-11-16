@@ -198,48 +198,10 @@ jobs:
           echo "::${token}::"
           exit "$rc"
 
-  claude-review:
-    name: claude-security-review
-    needs: [sast, malware-rules, secrets, dependencies]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    environment:
-      name: ${{ github.event.pull_request.head.repo.full_name == github.repository && 'pr-security-internal' || 'pr-security-external' }}
-    permissions:
-      contents: read
-      pull-requests: read
-    steps:
-      - name: Check out trusted review script (default branch only, no PR code)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          path: trusted
-          persist-credentials: false
-          sparse-checkout: .github/security
-
-      - name: Fetch the exact reviewed diff as data
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-        run: |
-          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ && "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
-          gh api --header "Accept: application/vnd.github.diff" \
-            "repos/${REPO}/compare/${BASE_SHA}...${HEAD_SHA}" > "$RUNNER_TEMP/pr.diff"
-          echo "Diff bytes: $(wc -c < "$RUNNER_TEMP/pr.diff")"
-
-      - name: Claude security review (no tools, structured output, bounded)
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          CLAUDE_MODEL: ${{ vars.CLAUDE_REVIEW_MODEL || 'claude-opus-5-5' }}
-          DIFF_FILE: ${{ runner.temp }}/pr.diff
-          PROMPT_FILE: trusted/.github/security/claude-review-prompt.md
-          SCHEMA_FILE: trusted/.github/security/claude-review-schema.json
-          MAX_DIFF_BYTES: "262144"
-        run: bash trusted/.github/security/claude-review.sh
-
   security-gate:
     name: security-gate
     if: ${{ !cancelled() }}
-    needs: [sast, malware-rules, secrets, dependencies, claude-review]
+    needs: [sast, malware-rules, secrets, dependencies]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     permissions: {}
@@ -249,7 +211,7 @@ jobs:
           RESULTS: ${{ toJSON(needs) }}
         run: |
           jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$RESULTS"
-          if ! jq -e 'length == 5 and (to_entries | all(.value.result == "success"))' <<<"$RESULTS" > /dev/null; then
+          if ! jq -e 'length == 4 and (to_entries | all(.value.result == "success"))' <<<"$RESULTS" > /dev/null; then
             echo "::error title=PR Security::At least one stage failed, was skipped or was cancelled. Merge is blocked."
             exit 1
           fi

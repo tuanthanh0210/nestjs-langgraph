@@ -1,8 +1,9 @@
 name: Registry Probe
 
-# Temporary diagnostic. Shows what a GitHub-hosted runner receives from the
-# Semgrep registry and which counting method reads it correctly. Holds no
-# secrets, checks out nothing, and is never merged.
+# Temporary diagnostic. Runs the corrected rule-pack fetch step on a
+# GitHub-hosted runner, against whichever format the registry answers with,
+# and against a forced JSON copy and a broken file. Holds no secrets, checks
+# out nothing, and is never merged.
 on:
   pull_request:
     branches: [main]
@@ -14,24 +15,38 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Same fetch as PR Security, then inspect each file
+      - name: Corrected fetch step, as it will be on main
         run: |
           mkdir -p "$RUNNER_TEMP/sast-rules"
-          env | grep -i -E 'proxy|curl' || echo "no proxy/curl env"
-          ls -la ~/.curlrc 2>/dev/null || echo "no ~/.curlrc"
           for spec in typescript:50 javascript:50 nodejs:20 expressjs:40 owasp-top-ten:300 github-actions:8 dockerfile:5; do
             pack="${spec%%:*}"; min="${spec##*:}"; file="$RUNNER_TEMP/sast-rules/${pack}.yml"
             curl --fail --silent --show-error --max-time 60 --retry 3 --output "$file" "https://semgrep.dev/c/p/${pack}"
-            count="$(grep -c -E '^- id:' "$file" || true)"
+            # The registry answers the same URL in YAML or in JSON, so the rules
+            # are counted with a parser. A line pattern reads a JSON answer as 0.
+            count="$(yq '.rules | length' "$file" 2>/dev/null || true)"
+            if [[ ! "$count" =~ ^[0-9]+$ ]]; then
+              echo "::error title=Semgrep rules::Registry pack ${pack} could not be parsed as a rule file. Refusing to run a weakened SAST scan."
+              exit 1
+            fi
             echo "${pack}: ${count} rules (minimum ${min})"
-            echo "    bytes=$(wc -c < "$file") lines=$(wc -l < "$file") sha=$(sha256sum "$file" | cut -c1-12) yq-rules=$(yq '.rules | length' "$file" 2>&1 | head -1)"
-            echo "    indented-id=$(grep -c -E '^ +- id:' "$file" || true) json-id=$(grep -o '"id":' "$file" | wc -l) any-id=$(grep -c -E 'id:' "$file" || true)"
-            echo "    head: $(head -c 160 "$file" | tr '\n' '~')"
+            if (( count < min )); then
+              echo "::error title=Semgrep rules::Registry pack ${pack} returned ${count} rules, below the expected minimum ${min}. Refusing to run a weakened SAST scan."
+              exit 1
+            fi
           done
+          sha256sum "$RUNNER_TEMP"/sast-rules/*.yml
+          for f in "$RUNNER_TEMP"/sast-rules/*.yml; do echo "format $(basename "$f"): $(head -c 1 "$f" | tr '{r' 'JY')"; done
 
-      - name: Same URL again without --fail
+      - name: Same counting on a forced JSON copy, an empty rule list and a broken file
         run: |
-          f="$RUNNER_TEMP/typescript-again.yml"
-          meta="$(curl --silent --show-error --max-time 60 --retry 3 --output "$f" --write-out '%{http_code} %{content_type} %{size_download}' "https://semgrep.dev/c/p/typescript")"
-          echo "typescript again: ${meta} dash-id=$(grep -c -E '^- id:' "$f" || true) sha=$(sha256sum "$f" | cut -c1-12)"
-          echo "    head: $(head -c 160 "$f" | tr '\n' '~')"
+          count_rules() { yq '.rules | length' "$1" 2>/dev/null || true; }
+          yq -o=json -I=0 '.' "$RUNNER_TEMP/sast-rules/javascript.yml" > "$RUNNER_TEMP/forced.json.yml"
+          echo "forced JSON copy: $(count_rules "$RUNNER_TEMP/forced.json.yml") (YAML original: $(count_rules "$RUNNER_TEMP/sast-rules/javascript.yml"))"
+          printf 'rules: []\n' > "$RUNNER_TEMP/empty.yml"
+          echo "empty rule list: '$(count_rules "$RUNNER_TEMP/empty.yml")'"
+          printf '<html><body>rate limited</body></html>\n' > "$RUNNER_TEMP/broken.yml"
+          c="$(count_rules "$RUNNER_TEMP/broken.yml")"
+          if [[ ! "$c" =~ ^[0-9]+$ ]]; then echo "broken file: rejected (count='${c}')"; else echo "broken file: ACCEPTED as ${c}"; exit 1; fi
+          printf 'no rules key here: true\n' > "$RUNNER_TEMP/nokey.yml"
+          c="$(count_rules "$RUNNER_TEMP/nokey.yml")"
+          echo "file without a rules key: count='${c}' (must be below every minimum)"

@@ -1,0 +1,1 @@
+export const RELEASE_BOT_TOKEN = 'ghp_80WF0z1NQ2je9Q66ELcyhpHivQ0HYGCWK5fz';

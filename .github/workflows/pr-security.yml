@@ -2,7 +2,7 @@ name: PR Security
 
 on:
   pull_request_target: # zizmor: ignore[dangerous-triggers] -- runs the default-branch copy so a PR cannot edit or disable these checks; PR code is only read as data, never built, installed or executed
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
     branches: [main]
 
 permissions: {}
@@ -49,9 +49,15 @@ jobs:
       - name: Fetch Semgrep registry rulesets
         run: |
           mkdir -p "$RUNNER_TEMP/sast-rules"
-          for pack in typescript javascript nodejs expressjs owasp-top-ten github-actions dockerfile; do
-            curl --fail --silent --show-error --max-time 60 --retry 3 \
-              --output "$RUNNER_TEMP/sast-rules/${pack}.yml" "https://semgrep.dev/c/p/${pack}"
+          for spec in typescript:50 javascript:50 nodejs:20 expressjs:40 owasp-top-ten:300 github-actions:8 dockerfile:5; do
+            pack="${spec%%:*}"; min="${spec##*:}"; file="$RUNNER_TEMP/sast-rules/${pack}.yml"
+            curl --fail --silent --show-error --max-time 60 --retry 3 --output "$file" "https://semgrep.dev/c/p/${pack}"
+            count="$(grep -c -E '^- id:' "$file" || true)"
+            echo "${pack}: ${count} rules (minimum ${min})"
+            if (( count < min )); then
+              echo "::error title=Semgrep rules::Registry pack ${pack} returned ${count} rules, below the expected minimum ${min}. Refusing to run a weakened SAST scan."
+              exit 1
+            fi
           done
           sha256sum "$RUNNER_TEMP"/sast-rules/*.yml
 

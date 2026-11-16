@@ -14,12 +14,16 @@ sha_re='^[0-9a-f]{40}$'
 merge_base="$(git -C "$pr_dir" merge-base "$base_sha" "$head_sha")"
 [[ "$merge_base" =~ $sha_re ]] || { echo "could not compute merge base" >&2; exit 2; }
 
+changes="$(mktemp)"
+trap 'rm -f "$changes"' EXIT
+git -C "$pr_dir" diff --no-renames --no-ext-diff --no-textconv --raw -z "$merge_base" "$head_sha" > "$changes"
+
 violations=0
 while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
   read -r _ new_mode _ <<<"$meta"
   status="${meta##* }"
   reason=""
-  if printf '%s\n' "$path" | grep -qE -f "$patterns"; then
+  if printf '%s\n' "$path" | grep -qiE -f "$patterns"; then
     reason="protected path (${status})"
   elif [[ "$new_mode" == "120000" ]]; then
     reason="symlink added or changed"
@@ -30,7 +34,7 @@ while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
     violations=$((violations + 1))
     printf 'BLOCKED  %-34s %q\n' "$reason" "$path"
   fi
-done < <(git -C "$pr_dir" diff --no-renames --no-ext-diff --no-textconv --raw -z "$merge_base" "$head_sha")
+done < "$changes"
 
 if (( violations > 0 )); then
   printf '\n%d change(s) touch CI, scanner configuration, install hooks or developer-tool hooks.\n' "$violations"

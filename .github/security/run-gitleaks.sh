@@ -6,7 +6,7 @@ config="${GITLEAKS_CONFIG_FILE:?GITLEAKS_CONFIG_FILE is required}"
 pr_dir="${PR_DIR:?PR_DIR is required}"
 base_sha="${BASE_SHA:?BASE_SHA is required}"
 head_sha="${HEAD_SHA:?HEAD_SHA is required}"
-report_dir="${RUNNER_TEMP:-/tmp}/gitleaks"
+report_dir="${RUNNER_TEMP:-/tmp}/gitleaks-reports"
 
 sha_re='^[0-9a-f]{40}$'
 [[ "$base_sha" =~ $sha_re && "$head_sha" =~ $sha_re ]] || { echo "BASE_SHA/HEAD_SHA must be full commit SHAs" >&2; exit 2; }

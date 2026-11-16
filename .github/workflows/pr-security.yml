@@ -52,7 +52,13 @@ jobs:
           for spec in typescript:50 javascript:50 nodejs:20 expressjs:40 owasp-top-ten:300 github-actions:8 dockerfile:5; do
             pack="${spec%%:*}"; min="${spec##*:}"; file="$RUNNER_TEMP/sast-rules/${pack}.yml"
             curl --fail --silent --show-error --max-time 60 --retry 3 --output "$file" "https://semgrep.dev/c/p/${pack}"
-            count="$(grep -c -E '^- id:' "$file" || true)"
+            # The registry answers the same URL in YAML or in JSON, so the rules
+            # are counted with a parser. A line pattern reads a JSON answer as 0.
+            count="$(yq '.rules | length' "$file" 2>/dev/null || true)"
+            if [[ ! "$count" =~ ^[0-9]+$ ]]; then
+              echo "::error title=Semgrep rules::Registry pack ${pack} could not be parsed as a rule file. Refusing to run a weakened SAST scan."
+              exit 1
+            fi
             echo "${pack}: ${count} rules (minimum ${min})"
             if (( count < min )); then
               echo "::error title=Semgrep rules::Registry pack ${pack} returned ${count} rules, below the expected minimum ${min}. Refusing to run a weakened SAST scan."

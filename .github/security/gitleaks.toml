@@ -1,0 +1,4 @@
+title = "pr-security gitleaks config (trusted, loaded from the default branch)"
+
+[extend]
+useDefault = true

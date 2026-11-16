@@ -1,0 +1,14 @@
+[[IgnoredVulns]]
+id = "GHSA-27r3-jxmh-p828"
+ignoreUntil = 2026-12-16T00:00:00Z
+reason = "body-parser 2.3.0 via @nestjs/platform-express; pre-existing on main when PR security CI was introduced. Fixed in 2.4.0. Upgrade before the expiry; the exemption lapses automatically."
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+ignoreUntil = 2026-12-16T00:00:00Z
+reason = "minimatch 10.2.6 (transitive); pre-existing on main when PR security CI was introduced. Fixed in 11.0.1. Upgrade before the expiry; the exemption lapses automatically."
+
+[[IgnoredVulns]]
+id = "GHSA-q7qp-rjg7-q26m"
+ignoreUntil = 2026-12-16T00:00:00Z
+reason = "multer 2.4.0 via @nestjs/platform-express; pre-existing on main when PR security CI was introduced. Fixed in 2.5.0. Upgrade before the expiry; the exemption lapses automatically."

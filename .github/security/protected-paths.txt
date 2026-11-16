@@ -1,0 +1,15 @@
+^\.github/
+(^|/)\.semgrepignore$
+(^|/)\.gitleaks\.toml$
+(^|/)\.gitleaksignore$
+(^|/)osv-scanner\.toml$
+(^|/)\.pnpmfile\.[cm]?js$
+(^|/)\.npmrc$
+(^|/)\.yarnrc(\.yml)?$
+^\.husky/
+^\.githooks/
+^\.vscode/
+^\.devcontainer/
+^\.claude/settings(\.local)?\.json$
+^\.claude/hooks/
+^\.mcp\.json$
